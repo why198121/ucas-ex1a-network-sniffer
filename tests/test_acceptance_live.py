@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication
 from scapy.layers.dns import DNS, DNSQR, DNSRR
 
 from labsniffer.capture import CaptureEngine
@@ -101,8 +100,8 @@ def test_child_process_exit(evidence_dir):
 
 @pytest.mark.live
 @pytest.mark.gui
-def test_sustained_gui_and_filter_semantics(evidence_dir):
-    app = QApplication.instance() or QApplication([])
+def test_sustained_gui_and_filter_semantics(evidence_dir, qt_app):
+    app = qt_app
     window = MainWindow()
     window.show()
     ticks, errors = [], []

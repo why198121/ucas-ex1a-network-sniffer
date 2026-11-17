@@ -59,7 +59,7 @@ def main():
     info["git"] = command_record(["git", "log", "--format=%h %aI %an %s", "-10"], destination / "git-history.txt")
     (destination / "environment.json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
     tests = ["test_capture_contract", "test_metadata_roundtrip", "test_protocols", "test_filters_http", "test_streams",
-             "test_demo", "test_nps_live", "test_processes_live", "test_wireshark", "test_acceptance_live"]
+             "test_demo", "test_nps_live", "test_processes_live", "test_gui_workflows", "test_wireshark", "test_acceptance_live"]
     command = [sys.executable, "-m", "pytest", *[f"tests/{name}.py" for name in tests], "-q",
                f"--basetemp={ROOT / '.work' / ('pytest-' + run_id)}", f"--junitxml={destination / 'junit.xml'}"]
     if args.offline:

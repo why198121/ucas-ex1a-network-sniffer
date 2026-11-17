@@ -4,7 +4,6 @@ import time
 import uuid
 
 import pytest
-from PySide6.QtWidgets import QApplication
 
 from labsniffer.capture import CaptureEngine
 from labsniffer.gui import MainWindow
@@ -62,25 +61,32 @@ def test_invalid_bpf_fails():
 
 @pytest.mark.gui
 @pytest.mark.live
-def test_gui_real_event_loop_idle_stop():
-    app = QApplication.instance() or QApplication([])
+def test_gui_real_event_loop_idle_stop(qt_app):
+    app = qt_app
     window = MainWindow()
     window.show()
-    window.bpf.setText("udp port 59998")
-    window.start_capture()
-    deadline = time.monotonic() + 1
-    ticks = 0
-    while time.monotonic() < deadline:
-        app.processEvents()
-        ticks += 1
-        time.sleep(0.01)
-    assert ticks > 20
-    window.stop_capture()
-    deadline = time.monotonic() + 3
-    while not window.engine.finished.is_set() and time.monotonic() < deadline:
-        app.processEvents()
-        time.sleep(0.01)
-    window.engine.wait(1)
-    assert not window.engine.error
-    window.close()
+    # 窗口完成初始绘制后，用户才能点击开始；响应检查从实际开始捕获计时。
     app.processEvents()
+    try:
+        window.bpf.setText("udp port 59998")
+        window.start_button.click()
+        deadline = time.monotonic() + 1
+        ticks = 0
+        while time.monotonic() < deadline:
+            app.processEvents()
+            ticks += 1
+            time.sleep(0.01)
+        assert ticks > 20
+        window.stop_button.click()
+        deadline = time.monotonic() + 3
+        while not window.engine.finished.is_set() and time.monotonic() < deadline:
+            app.processEvents()
+            time.sleep(0.01)
+        window.engine.wait(1)
+        assert not window.engine.error
+    finally:
+        if window.engine:
+            window.engine.stop()
+            window.engine.wait(5)
+        window.close()
+        app.processEvents()

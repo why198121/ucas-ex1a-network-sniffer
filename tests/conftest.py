@@ -3,6 +3,7 @@ import os
 import uuid
 
 import pytest
+from PySide6.QtWidgets import QApplication
 
 
 def pytest_configure(config):
@@ -18,3 +19,10 @@ def evidence_dir():
     directory = Path(os.environ.get("LAB_EVIDENCE_DIR", Path(__file__).resolve().parents[1] / ".work" / "test-evidence"))
     directory.mkdir(parents=True, exist_ok=True)
     return directory
+
+
+@pytest.fixture(scope="session")
+def qt_app():
+    app = QApplication.instance() or QApplication([])
+    yield app
+    app.processEvents()

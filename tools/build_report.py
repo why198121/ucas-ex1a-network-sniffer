@@ -92,6 +92,12 @@ def main():
             story.append(paragraph(f"该持续测试实际捕获 {stats['captured']} 包 / {stats['bytes']} 字节，驱动丢包 {stats['driver_drops']}，采集队列丢弃 {stats['capture_queue_drops']}，GUI 队列丢弃 {stats['gui_queue_drops']}，接口丢包未知。使用显示过滤 tcp 后显示零包，后台导出的 PCAP 仍包含全部 {gui['generated']} 个 UDP 包。"))
             story.append(paragraph(f"实际退出测试的流量进程 PID={child['pid']}，启动器 PID={child['launcher_pid']}；观察到 {len(child['flows'])} 条 TCP 流，退出码 {child['exit_code']}，退出后活动连接 {child['active_connections_after_exit']}。历史 PID 元数据保留。"))
             story.append(paragraph((base / "lua_listener.txt").read_text(encoding="utf-8").strip(), "code"))
+            navigation_path = base / "gui_navigation.json"
+            if navigation_path.exists():
+                navigation = json.loads(navigation_path.read_text(encoding="utf-8"))
+                story.extend(table([["实际窗口尺寸", "数据包可视高度", "TCP 流可视高度"]] +
+                                   [[" × ".join(map(str, item["window"])), item["packet_viewport_height"], item["flow_viewport_height"]]
+                                    for item in navigation["measurements"]], [0.40, 0.30, 0.30]))
             story.extend(table([["同文件对照", "包数", "结果", "TShark 解码设置"]] +
                                [[item["source"], item["packets_compared"], item["status"], item["decode_as"] or "默认"] for item in comparison],
                                [0.30, 0.12, 0.12, 0.46]))
