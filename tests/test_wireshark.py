@@ -2,7 +2,6 @@ import csv
 import io
 import json
 import os
-import shutil
 import subprocess
 import time
 import uuid
@@ -14,6 +13,7 @@ from scapy.layers.l2 import Ether
 from scapy.packet import Raw
 
 from labsniffer.capture import CaptureEngine
+from labsniffer.cli import find_wireshark
 from labsniffer.demo import DemoServer, HEADER, MAGIC, decode, encode, exercise
 from labsniffer.models import RawPacket
 from labsniffer.npcap import CaptureConfig, Npcap
@@ -25,15 +25,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def tshark_path():
-    configured = os.environ.get("TSHARK_PATH")
-    candidates = [Path(configured)] if configured else []
-    candidates += [ROOT / ".work/WiresharkPortable64/App/Wireshark/tshark.exe", Path("C:/Program Files/Wireshark/tshark.exe")]
-    if shutil.which("tshark"):
-        candidates.append(Path(shutil.which("tshark")))
-    for path in candidates:
-        if path.is_file():
-            return path
-    pytest.skip("未安装 TShark；Lua 加载与字段交叉验证未验证")
+    try:
+        return find_wireshark("tshark.exe")
+    except FileNotFoundError as error:
+        pytest.skip(str(error))
 
 
 def tshark(arguments, scripts=("labdemo.lua", "labproc.lua")):
@@ -47,6 +42,7 @@ def tshark(arguments, scripts=("labdemo.lua", "labproc.lua")):
     with (evidence / "tshark-calls.jsonl").open("a", encoding="utf-8") as log:
         log.write(json.dumps({"command": command, "exit_code": result.returncode, "stderr": result.stderr}, ensure_ascii=False) + "\n")
     assert result.returncode == 0, result.stderr
+    assert "Unable to load" not in result.stderr, result.stderr
     assert "Lua Error" not in result.stderr and "Lua: " not in result.stderr, result.stderr
     return result
 
@@ -60,6 +56,26 @@ def table(arguments, fields, scripts=("labdemo.lua", "labproc.lua")):
     rows = list(csv.reader(io.StringIO(result.stdout)))
     assert all(not row[-1] for row in rows), rows
     return [row[:-1] for row in rows], result
+
+
+@pytest.mark.wireshark
+def test_runtime_plugins_and_interfaces(evidence_dir):
+    interfaces = tshark(["-D"])
+    assert "Unable to load" not in interfaces.stderr, interfaces.stderr
+    assert "\\Device\\NPF_Loopback" in interfaces.stdout, interfaces.stdout
+    plugins = tshark(["-G", "plugins"])
+    assert "Unable to load" not in plugins.stderr, plugins.stderr
+    assert "falco-events.dll" in plugins.stdout
+    for name in ("labdemo.lua", "labproc.lua"):
+        assert name in plugins.stdout
+    protocols = tshark(["-G", "protocols"])
+    registered = {row[2] for row in csv.reader(io.StringIO(protocols.stdout), delimiter="\t") if len(row) >= 3}
+    assert {"cloudtrail", "gcpaudit", "k8saudit", "labdemo", "labproc"} <= registered
+    (evidence_dir / "wireshark_runtime.json").write_text(json.dumps({
+        "status": "PASS", "executable": str(tshark_path()), "interfaces": interfaces.stdout.splitlines(),
+        "stderr": interfaces.stderr + plugins.stderr + protocols.stderr, "plugins": plugins.stdout.splitlines(),
+        "verified_protocols": ["cloudtrail", "gcpaudit", "k8saudit", "labdemo", "labproc"]
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 @pytest.mark.wireshark

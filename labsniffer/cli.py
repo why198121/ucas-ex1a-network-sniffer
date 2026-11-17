@@ -21,6 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 def find_wireshark(name):
     configured = os.environ.get("TSHARK_PATH" if name == "tshark.exe" else "WIRESHARK_PATH")
     candidates = [Path(configured)] if configured else []
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if local_appdata:
+        candidates.append(Path(local_appdata) / "UCAS-NetLab/Wireshark" / name)
     candidates += [Path("C:/Program Files/Wireshark") / name, ROOT / ".work/WiresharkPortable64/App/Wireshark" / name]
     if shutil.which(name):
         candidates.append(Path(shutil.which(name)))
@@ -30,16 +33,19 @@ def find_wireshark(name):
     raise FileNotFoundError(f"找不到 {name}；请安装 Wireshark 或设置对应环境变量")
 
 
-def wireshark_arguments(path, gui=False):
-    path = Path(path).resolve()
-    metadata = load_metadata(path)
+def wireshark_arguments(path=None, gui=False):
+    path = Path(path).resolve() if path is not None else None
+    if path is None and not gui:
+        raise ValueError("TShark 离线分析需要指定 PCAP 文件")
+    metadata = load_metadata(path) if path is not None else None
     executable = find_wireshark("Wireshark.exe" if gui else "tshark.exe")
     command = [str(executable)]
     if not gui:
         command += ["-2", "-R", "frame.number >= 1"]
     for script in ("labdemo.lua", "labproc.lua", "labdemo_stats.lua"):
         command += ["-X", f"lua_script:{ROOT / 'wireshark' / script}"]
-    command += ["-r", str(path)]
+    if path is not None:
+        command += ["-r", str(path)]
     if metadata:
         command += ["-o", f"labproc.metadata:{path}.labproc.json", "-o", f"labproc.capture:{path}"]
     return command
@@ -59,7 +65,7 @@ def main():
     inspect = subparsers.add_parser("inspect")
     inspect.add_argument("pcap", type=Path)
     wireshark = subparsers.add_parser("wireshark")
-    wireshark.add_argument("pcap", type=Path)
+    wireshark.add_argument("pcap", type=Path, nargs="?")
     wireshark.add_argument("--gui", action="store_true")
     args = parser.parse_args()
     if args.action == "devices":

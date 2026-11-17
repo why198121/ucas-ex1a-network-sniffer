@@ -98,6 +98,10 @@ def main():
                 story.extend(table([["实际窗口尺寸", "数据包可视高度", "TCP 流可视高度"]] +
                                    [[" × ".join(map(str, item["window"])), item["packet_viewport_height"], item["flow_viewport_height"]]
                                     for item in navigation["measurements"]], [0.40, 0.30, 0.30]))
+            desktop_path = base / "wireshark-desktop/repair-result.json"
+            if desktop_path.exists():
+                desktop = json.loads(desktop_path.read_text(encoding="utf-8"))
+                story.append(paragraph(f"补充 Wireshark 桌面验收：欢迎界面显示 {desktop['local_interfaces']} 个本机接口；GUI 捕获 {desktop['packets']} 包，实际点击停止按钮后正常结束。同步自研采集器的报文字节一致。LABDEMO 解析 {desktop['labdemo_packets']} 包；PID {desktop['traffic_pid']} 的过滤结果为 {desktop['pid_packets']} 包、{len(desktop['tcp_streams'])} 条 TCP 流。原始记录位于 evidence/acceptance/evidence/wireshark-desktop。"))
             story.extend(table([["同文件对照", "包数", "结果", "TShark 解码设置"]] +
                                [[item["source"], item["packets_compared"], item["status"], item["decode_as"] or "默认"] for item in comparison],
                                [0.30, 0.12, 0.12, 0.46]))

@@ -29,7 +29,7 @@
 
   <section title="2　运行环境与模块架构">
     <environment/>
-    <para>本机原有 Anaconda Python 3.11.4 的旧 Visual C++ 运行库无法加载所选 Qt，实际使用独立 Python 3.12.14 x64 环境 .venv312。没有更换操作系统、驱动或全局 Python。Npcap 设置限制管理员访问，因此实时测试在获准的管理员执行环境中完成。Wireshark 4.6.9 来自官方签名安装包，本地使用 portable 目录，交付 ZIP 不重新分发该安装包。</para>
+    <para>本机原有 Anaconda Python 3.11.4 的旧 Visual C++ 运行库无法加载所选 Qt，实际使用独立 Python 3.12.14 x64 环境 .venv312。最新检查中 Npcap 服务处于 RUNNING、AdminOnly=0；受限工具进程与常规桌面进程的枚举范围存在差异，实际验收在具备驱动访问权限的执行环境中完成。Wireshark 4.6.9 的 Wireshark Foundation 签名有效，本机使用 %LOCALAPPDATA%/UCAS-NetLab/Wireshark 英文安装路径，交付 ZIP 不重新分发其二进制安装包。</para>
     <table widths="0.24,0.40,0.36">
       <row><cell>模块</cell><cell>职责与接口</cell><cell>第三方边界</cell></row>
       <row><cell>npcap.py</cell><cell>枚举设备、启动/BPF、读取原始包、驱动统计</cell><cell>ctypes 调用 Npcap；pefile 检查 DLL 位数</cell></row>
@@ -110,7 +110,7 @@ frame.truncated or ip.fragmented</code>
     <evidence/>
     <para>真实流量证据由本机 socket、ping、Npcap 和 Windows 连接表产生。offline_labdemo.pcap 与 offline_tcp_gap_retransmission.pcap 是人工构造的边界样本，用于精确控制异常长度、乱序、重复、冲突和缺口。其来源与真实流量分别标记。测试没有使用 mock 替代 Npcap、Windows API、Qt 或 TShark。</para>
     <para>同一份 PCAP 与 TShark 对照捕获/线上长度、IP 地址、TCP/UDP 端口、TCP 原始序号和 DNS ID；三个 HTTP 测试各验证三个 GET。非标准 HTTP 端口通过 TShark -d tcp.port==18080,http 或 18081,http 显式选择解码；自研识别依据结构。TCP 对照使用 tcp.seq_raw，避免 Wireshark 相对序号造成表面差异。显示包的高层标签可能因重组归属规则而不同，比较基于具体字段。</para>
-    <para>TShark 的外部 sinsp/Falco 云审计插件在本机存在加载警告，完整 stderr 已保存到 tshark-calls.jsonl；本项目 Lua 字段检查同时验证 _ws.lua.error 为空。界面通过实际事件循环和控件状态测试，遵循用户限制未采集或检查截图，因此没有宣称视觉版式或菜单交互已验证。</para>
+    <para>当前 Wireshark 完整加载 Falco 的 cloudtrail、gcpaudit、k8saudit 和课程 Lua 协议，回归检查要求插件加载没有警告、_ws.lua.error 为空，并核对真实接口列表。补充桌面验收使用 Windows 辅助功能接口检查欢迎界面、实时捕获状态、停止按钮和 PID 过滤结果；没有采集或检查截图。工具栏交互与 Lua 字段有实际记录，其他菜单及视觉版式保持未验证。</para>
   </section>
 
   <section title="8　运行与复现命令">
@@ -130,7 +130,7 @@ frame.truncated or ip.fragmented</code>
 
   <section title="9　限制、排错和验收边界">
     <para>已知功能边界包括：仅标准单链路 PCAP；IP 分片不重组；DNS 仅 UDP；HTTP/1.x 有界分析，正文仅预览且不解压；TLS 无解密；TCP 内存窗口有界；PID 依赖本机同期采样且有时间误差；IPv6 scope 证据不足保持不确定；extcap 未实现。连续抓包文件达到配置上限后停止并提示。重开 PCAP 可以重新分析保留窗口，但不能恢复从未捕获或已被驱动丢弃的数据。</para>
-    <para>排错证据：Qt 动态库加载需使用兼容的 Python/Visual C++ 运行环境；Npcap 管理员限制导致普通受限进程无法打开接口；PCAP DLT_NULL 数值零需要显式保留；TShark 进程字段要求 -2 与生成协议树的 -R 参数；纳秒时间比较使用 FieldInfo 的 NSTime 成分，避免双精度绝对时间误差；Windows 虚拟环境启动器 PID 与实际 Python PID 可以不同，真实退出测试使用流量进程自行报告的 os.getpid 与捕获证据比较。</para>
+    <para>排错证据：Qt 动态库加载需使用兼容的 Python/Visual C++ 运行环境；Npcap 接口访问在具有相应权限的常规 Windows 进程中验证。中文路径下三个 Falco DLL 的 LoadLibraryW 加载成功，UTF-8 字节传入 LoadLibraryA 时返回 126；同版本完整复制到英文安装路径后，三个协议注册成功。默认桌面配置与独立配置均显示 11 个本机接口。PCAP DLT_NULL 数值零需要显式保留；TShark 进程字段要求 -2 与生成协议树的 -R 参数；纳秒时间比较使用 FieldInfo 的 NSTime 成分；Windows 虚拟环境启动器 PID 与实际 Python PID 可以不同，退出测试使用流量进程自行报告的 os.getpid 与捕获证据比较。</para>
     <para>未强制制造真实网络的乱序、重传、丢包、PID 复用和权限拒绝；这些情况的实现边界与已覆盖离线样本已分别说明。外部 Ethernet 实时流量、极限带宽、Wireshark GUI 菜单交互、视觉布局和实际录屏未验证。报告中的本机性能数字只对应本次测试条件。测试 PASS 不能扩展为未测环境的保证。</para>
     <para>缺少驱动时 GUI 保留离线使用；权限、接口、BPF、文件长度或配对校验失败时明确显示原因。失败不会返回伪造 PID、伪造零丢包或成功状态。后台程序错误写入 output/application.log，验收错误写入独立 pytest.log。验证使用隔离输出目录，没有修改用户真实抓包。</para>
   </section>

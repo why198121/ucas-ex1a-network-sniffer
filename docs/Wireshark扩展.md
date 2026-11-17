@@ -4,14 +4,19 @@
 
 ## 加载和卸载
 
-推荐本次启动按文件加载，避免改写系统插件目录。在 Wireshark 安装目录可自动查找到可执行文件；其他位置通过 TSHARK_PATH、WIRESHARK_PATH 指定绝对路径。项目开发时使用 .work/WiresharkPortable64/App/Wireshark，交付 ZIP 不包含 Wireshark 安装包。
+推荐本次启动按文件加载。启动器优先使用显式设置的 TSHARK_PATH、WIRESHARK_PATH，其次查找 `%LOCALAPPDATA%\UCAS-NetLab\Wireshark`、系统安装目录、项目 portable 目录和 PATH。GUI 与测试共用同一个查找函数。本机实际使用 `%LOCALAPPDATA%\UCAS-NetLab\Wireshark` 中的 4.6.9；交付 ZIP 不包含 Wireshark 安装包。
 
 ```powershell
+.\open_wireshark.ps1
 .\open_wireshark.ps1 -Capture '.\samples\real_http.pcap'
 .\open_wireshark.ps1 -Capture '.\samples\real_http.pcap' -TShark
 ```
 
-样例的实际名称见 samples/样例清单.json，以上名称需替换。启动器先校验配套 JSON，再通过 -X lua_script 参数加载三个脚本，自动传入 labproc.metadata 和 labproc.capture 的绝对路径。关闭此实例即可卸载本次加载；正常启动 Wireshark 时不会自动加载这些项目脚本。
+省略 Capture 时打开包含网卡列表的欢迎界面，可以直接选择 loopback 开始实时抓包。指定 Capture 时，样例的实际名称见 samples/样例清单.json，以上名称需替换。启动器先校验配套 JSON，再通过 -X lua_script 参数加载三个脚本，自动传入 labproc.metadata 和 labproc.capture 的绝对路径。关闭此实例即可卸载本次加载；直接启动 Wireshark 可执行文件时不会自动加载这些项目脚本。
+
+本机 2026-11-17 排错记录：系统 ANSI 代码页为 936。三个 Falco DLL 在中文路径下通过 LoadLibraryW 和系统代码页字节加载均成功，向 LoadLibraryA 传入 UTF-8 路径时均返回错误 126。将同一份完整 Wireshark 4.6.9 部署到上述英文目录后，TShark stderr 中的加载警告消失，cloudtrail、gcpaudit、k8saudit 和两个课程协议全部注册成功。Wireshark.exe 的 Wireshark Foundation 签名有效，复制前后的核心程序和三个 Falco DLL 摘要一致。
+
+默认桌面配置与独立验证配置均已显示 11 个本机接口，包括 WLAN、以太网和 loopback。通过 GUI 实际捕获 54 个本机 HTTP/UDP 包，并通过工具栏停止按钮结束捕获；自研采集器同步保存的报文字节逐包一致。LABDEMO 识别 8 个包，包含两个预期异常消息；本次 PID 72792 的元数据过滤得到 36 个包、3 条 TCP 流。没有配套信息的 Wireshark 原生捕获显示 unknown_no_metadata。原始日志和辅助功能控件记录保存于开发目录 output/wireshark-repair，交付副本位于 evidence/acceptance/evidence/wireshark-desktop。
 
 需要长期安装时，在 Wireshark“帮助 → 关于 → 文件夹”找到个人 Lua 插件目录，创建 ucas_ex1a 子目录，将三个 Lua 文件和 vendor 子目录完整复制进去，重启 Wireshark。在“分析 → 启用的协议”中检查 labdemo、labproc。采用长期安装方式时，直接启动 Wireshark，并在“首选项 → Protocols → LABPROC”设置配对 PCAP 和 JSON；不要同时使用带 -X 的项目启动器，以免重复注册。卸载时删除自己创建的 ucas_ex1a 目录并重启。上述长期目录复制与 GUI 菜单操作未在本次自动验收中执行；本次实际验证采用 -X 进程内加载。
 
