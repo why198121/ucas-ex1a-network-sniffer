@@ -13,9 +13,12 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, 
 
 from .capture import CaptureEngine
 from .filters import FilterError, compile_filter
+from .flow_gui import FlowDialog
 from .npcap import CaptureConfig, CaptureError, Npcap
+from .processes import ProcessTracker
 from .protocols import parse_packet
 from .storage import export_session
+from .streams import StreamManager
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,7 +79,7 @@ class MainWindow(QMainWindow):
         self.reported_error = ""
         self.filter_function = lambda packet: True
         self.parser = parse_packet
-        self.analyzer = None
+        self.analyzer = StreamManager()
         self.tracker = None
         central = QWidget()
         layout = QVBoxLayout(central)
@@ -128,6 +131,19 @@ class MainWindow(QMainWindow):
             button.clicked.connect(lambda checked=False, text=expression: self.set_filter(text))
             self.quick_controls.addWidget(button)
         layout.addLayout(self.quick_controls)
+        flow_controls = QHBoxLayout()
+        self.process_filter = QLineEdit()
+        self.process_filter.setPlaceholderText("TCP 流筛选：PID 或完整进程名")
+        self.flow_button = QPushButton("追踪所选数据包的 TCP 流")
+        self.flow_filter_button = QPushButton("仅显示所选流的数据包")
+        flow_controls.addWidget(self.process_filter, 1)
+        flow_controls.addWidget(self.flow_button)
+        flow_controls.addWidget(self.flow_filter_button)
+        layout.addLayout(flow_controls)
+        self.flow_tree = QTreeWidget()
+        self.flow_tree.setHeaderLabels(["流编号", "端点 A", "端点 B", "状态", "A/B 包数", "A/B 字节", "进程", "关联状态", "起止时间"])
+        self.flow_tree.setMaximumHeight(190)
+        layout.addWidget(self.flow_tree)
         self.model = PacketModel()
         self.table = QTableView()
         self.table.setModel(self.model)
@@ -160,6 +176,9 @@ class MainWindow(QMainWindow):
         self.save_button.clicked.connect(self.export_file)
         self.apply_button.clicked.connect(self.apply_filter)
         self.display_filter.returnPressed.connect(self.apply_filter)
+        self.flow_button.clicked.connect(self.follow_selected_packet)
+        self.flow_filter_button.clicked.connect(self.filter_selected_flow)
+        self.flow_tree.itemDoubleClicked.connect(self.follow_tree_flow)
         self.table.selectionModel().selectionChanged.connect(self.show_packet)
         self.timer = QTimer(self)
         self.timer.setInterval(100)
@@ -201,6 +220,13 @@ class MainWindow(QMainWindow):
         self.save_button.setEnabled(not running and self.engine is not None and self.engine.stats.saved > 0)
 
     def make_engine(self, config=None, source=None):
+        self.analyzer = StreamManager()
+        if self.tracker:
+            self.tracker.stop()
+            self.tracker = None
+        if config:
+            self.tracker = ProcessTracker()
+            self.tracker.start()
         return CaptureEngine(ROOT / "output" / "sessions", config=config, source=source,
                              parser=self.parser, analyzer=self.analyzer, process_tracker=self.tracker)
 
@@ -209,7 +235,7 @@ class MainWindow(QMainWindow):
             config = CaptureConfig(self.adapters.currentData() or "", self.bpf.text(), self.snaplen.value(),
                                    self.promiscuous.isChecked(), self.timeout_ms.value(), self.buffer_mb.value())
             self.begin(config=config)
-        except (ValueError, OSError) as error:
+        except (ValueError, OSError, RuntimeError) as error:
             self.show_error("无法开始", error)
 
     def begin(self, config=None, source=None):
@@ -218,6 +244,48 @@ class MainWindow(QMainWindow):
         self.engine = self.make_engine(config, source)
         self.engine.start()
         self.set_running(True)
+
+    def follow_selected_packet(self):
+        packet = self.selected_packet()
+        if packet and packet.stream_id is not None:
+            self.show_flow(packet.stream_id)
+
+    def follow_tree_flow(self, item, column):
+        self.show_flow(item.data(0, Qt.UserRole))
+
+    def show_flow(self, identifier):
+        flow = self.analyzer.get(identifier)
+        if flow is None:
+            self.show_error("流不可用", "该流已离开内存保留窗口，请重新打开完整会话")
+            return
+        dialog = FlowDialog(flow, self)
+        dialog.exec()
+
+    def filter_selected_flow(self):
+        items = self.flow_tree.selectedItems()
+        packet = self.selected_packet()
+        identifier = items[0].data(0, Qt.UserRole) if items else (packet.stream_id if packet else None)
+        if identifier is not None:
+            self.set_filter(f"tcp.stream == {identifier}")
+
+    def refresh_flows(self):
+        selected = self.flow_tree.selectedItems()
+        selected_id = selected[0].data(0, Qt.UserRole) if selected else None
+        self.flow_tree.clear()
+        query = self.process_filter.text().strip().lower()
+        for flow in self.analyzer.snapshot():
+            owners = flow["owners"]
+            if query and not any(query == str(owner["pid"]) or query == owner["name"].lower() for owner in owners):
+                continue
+            names = sorted({f"{owner['pid']} {owner['name']}" for owner in owners})
+            item = QTreeWidgetItem([str(flow["id"]), str(flow["endpoints"][0]), str(flow["endpoints"][1]), flow["state"],
+                                    str(flow["packets"]), str(flow["bytes"]), "; ".join(names) or "未知",
+                                    "/".join(flow["association_statuses"]),
+                                    f"{flow['started'] / 1e9:.6f} – {flow['ended'] / 1e9:.6f}"])
+            item.setData(0, Qt.UserRole, flow["id"])
+            self.flow_tree.addTopLevelItem(item)
+            if flow["id"] == selected_id:
+                item.setSelected(True)
 
     def stop_capture(self):
         if self.engine:
@@ -280,6 +348,9 @@ class MainWindow(QMainWindow):
                             f"{'已停止' if self.engine.finished.is_set() else '运行中'} {self.engine.error}")
         if self.engine.finished.is_set():
             self.set_running(False)
+        if not hasattr(self, "last_flow_refresh") or time.monotonic() - self.last_flow_refresh > 0.5:
+            self.refresh_flows()
+            self.last_flow_refresh = time.monotonic()
         if self.engine.error and self.reported_error != self.engine.error:
             self.reported_error = self.engine.error
             self.show_error("操作已停止", self.engine.error)
