@@ -17,6 +17,8 @@ def direction_text(direction, hexadecimal=False):
         parts.append("[未观察到 SYN；流起点可能缺失]")
     if direction["limited"]:
         parts.append("[重组达到内存限制；内容不完整]")
+    if direction["capture_truncated"]:
+        parts.append("[此方向包含捕获截断包；未保存的内容无法恢复]")
     if direction["conflict_bytes"]:
         parts.append(f"[重叠冲突 {direction['conflict_bytes']} 字节；保留首次观察值]")
     cursor = 0 if not direction["missing_prefix"] else (direction["segments"][0][0] if direction["segments"] else 0)

@@ -1,10 +1,12 @@
 from scapy.layers.inet import IP, TCP
 from scapy.layers.l2 import Ether
 from scapy.packet import Raw
+from dataclasses import replace
 
 from labsniffer.models import RawPacket
 from labsniffer.protocols import parse_packet
-from labsniffer.streams import StreamManager
+from labsniffer.streams import Reassembly, StreamManager
+from labsniffer.storage import PcapFile
 
 
 def packet(number, seq, payload=b"", flags="PA", reverse=False, timestamp=None):
@@ -60,3 +62,35 @@ def test_sequence_wrap_and_midstream_uncertainty():
     manager = StreamManager()
     manager.add(packet(1, 100, b"later"))
     assert manager.get(0)["directions"][0]["missing_prefix"]
+
+
+def test_retention_limits_and_offline_gap_capture(evidence_dir):
+    buffer = Reassembly(limit=4)
+    buffer.add(10, b"", syn=True)
+    buffer.add(11, b"abcd")
+    buffer.add(15, b"e")
+    assert buffer.view()["limited"] and buffer.stored_bytes == 4
+    manager = StreamManager(max_bytes=8)
+    records = [packet(1, 100, flags="S"), packet(2, 111, b"later"), packet(3, 111, b"later"),
+               packet(4, 111, b"LATER"), packet(5, 116, flags="FA")]
+    path = evidence_dir / "offline_tcp_gap_retransmission.pcap"
+    with PcapFile.writer(path, 1) as writer:
+        for item in records:
+            writer.append(item.raw)
+            manager.add(item)
+    view = manager.get(0)["directions"][0]
+    assert view["gaps"] == [(0, 10)]
+    assert view["duplicate_bytes"] == 10 and view["conflict_bytes"] == 5
+    assert view["incomplete"] and not manager.get(0)["http"][0]
+
+
+def test_capture_truncation_marks_stream_incomplete():
+    manager = StreamManager()
+    manager.add(packet(1, 100, flags="S"))
+    raw = packet(2, 101, b"GET / HTTP/1.1\r\nHost: lab.test\r\n\r\n").raw
+    item = parse_packet(replace(raw, wirelen=raw.wirelen + 20))
+    manager.add(item)
+    view = manager.get(0)
+    assert view["directions"][0]["capture_truncated"]
+    assert view["directions"][0]["incomplete"]
+    assert view["http"][0][0]["reassembly_incomplete"]

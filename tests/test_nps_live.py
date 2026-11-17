@@ -61,6 +61,7 @@ def test_invalid_bpf_fails():
 
 
 @pytest.mark.gui
+@pytest.mark.live
 def test_gui_real_event_loop_idle_stop():
     app = QApplication.instance() or QApplication([])
     window = MainWindow()

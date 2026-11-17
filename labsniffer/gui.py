@@ -2,6 +2,7 @@ import json
 import logging
 import queue
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -82,6 +83,9 @@ class MainWindow(QMainWindow):
         self.parser = parse_packet
         self.analyzer = StreamManager()
         self.tracker = None
+        self.export_thread = None
+        self.export_results = queue.Queue(1)
+        self.export_message = ""
         central = QWidget()
         layout = QVBoxLayout(central)
         self.setCentralWidget(central)
@@ -214,11 +218,12 @@ class MainWindow(QMainWindow):
             self.status.setText(str(error))
 
     def set_running(self, running):
+        exporting = self.export_thread is not None and self.export_thread.is_alive()
         for widget in (self.start_button, self.refresh_button, self.adapters, self.bpf, self.snaplen,
                        self.buffer_mb, self.timeout_ms, self.promiscuous, self.open_button):
-            widget.setEnabled(not running)
+            widget.setEnabled(not running and not exporting)
         self.stop_button.setEnabled(running)
-        self.save_button.setEnabled(not running and self.engine is not None and self.engine.stats.saved > 0)
+        self.save_button.setEnabled(not running and not exporting and self.engine is not None and self.engine.stats.saved > 0)
 
     def make_engine(self, config=None, source=None):
         self.analyzer = StreamManager()
@@ -311,13 +316,34 @@ class MainWindow(QMainWindow):
     def export_file(self):
         path, _ = QFileDialog.getSaveFileName(self, "导出完整会话及进程信息", str(ROOT / "output" / "capture.pcap"), "PCAP (*.pcap)")
         if path:
+            self.begin_export(path)
+
+    def begin_export(self, path):
+        if not self.engine or not self.engine.finished.is_set():
+            raise RuntimeError("导出前需要停止采集并完成磁盘写入")
+        if self.export_thread and self.export_thread.is_alive():
+            raise RuntimeError("已有导出任务正在运行")
+        directory = self.engine.directory
+
+        def write():
             try:
-                export_session(self.engine.directory, path)
-                self.status.setText(f"已导出：{path} 和配套 .labproc.json")
-            except (ValueError, OSError) as error:
-                self.show_error("导出失败", error)
+                export_session(directory, path)
+                self.export_results.put((str(path), None))
+            except Exception as error:
+                logging.exception("导出失败")
+                self.export_results.put((str(path), error))
+
+        self.export_message = "正在后台导出完整会话"
+        self.export_thread = threading.Thread(target=write, name="lab-export", daemon=False)
+        self.export_thread.start()
+        self.set_running(False)
 
     def refresh_packets(self):
+        if not self.export_results.empty():
+            path, error = self.export_results.get_nowait()
+            self.export_message = f"已导出：{path} 和配套 .labproc.json" if error is None else "导出失败"
+            if error:
+                self.show_error("导出失败", error)
         if not self.engine:
             return
         batch = []
@@ -350,7 +376,7 @@ class MainWindow(QMainWindow):
                             f"捕获字节 {stats['bytes']} | 平均 {stats['packets_per_second']:.1f} 包/s · {stats['bytes_per_second']:.1f} B/s | "
                             f"驱动丢包 {driver} · 接口丢包 {interface} | 采集队列丢弃 {stats['capture_queue_drops']} · "
                             f"GUI 队列丢弃 {stats['gui_queue_drops']} · 窗口淘汰 {self.evicted} | "
-                            f"{'已停止' if self.engine.finished.is_set() else '运行中'} {self.engine.error}")
+                            f"{'已停止' if self.engine.finished.is_set() else '运行中'} {self.engine.error} {self.export_message}")
         if self.engine.finished.is_set():
             self.set_running(False)
         if not hasattr(self, "last_flow_refresh") or time.monotonic() - self.last_flow_refresh > 0.5:
@@ -383,6 +409,10 @@ class MainWindow(QMainWindow):
         self.bytes_view.setPlainText(hex_view(packet.raw.data))
 
     def closeEvent(self, event):
+        if self.export_thread and self.export_thread.is_alive():
+            event.ignore()
+            QTimer.singleShot(100, self.close)
+            return
         if self.engine and any(thread.is_alive() for thread in self.engine.threads):
             self.engine.stop()
             event.ignore()

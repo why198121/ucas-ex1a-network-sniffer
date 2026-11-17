@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<report>
+  <title>实验 1A：带 GUI 的网络嗅探器</title>
+  <subtitle>Windows Npcap · 协议分析 · TCP / PID · Wireshark Lua</subtitle>
+  <para>姓名：待填写　学号：待填写　课程：软件系统与安全　日期：2026-11-17</para>
+  <para>真实远程 Git 仓库地址：待填写。本项目已经建立本地 Git 仓库并保留实际开发提交，交付源码包含 git-history.bundle 与 git-history.txt。未创建或发布远程仓库，不能把本地路径当作远程 Git 链接。演示视频尚未录制，交付实际运行的录制步骤和讲解稿。</para>
+  <para>AI 使用说明：本项目由 Codex 辅助完成实现、测试与文档。提交者应逐段审阅核心代码、运行演示、理解本报告中的边界，并据实说明个人完成和理解的部分。第三方依赖与项目实现分别列明。</para>
+
+  <section title="1　课程要求、实现和验收">
+    <para>依据为刘鹏《实验 1 讲解 2026》，课件标注日期 2026-11-10，共 66 页。页码使用 PDF 物理页码。课件文字已经提取核对；依照用户限制未使用视觉功能，图片内额外文字未验证。第 31–63 页关于实验 1B 的内容未纳入项目。</para>
+    <table widths="0.10,0.29,0.20,0.26,0.15">
+      <row><cell>页码</cell><cell>课件内容</cell><cell>实现模块</cell><cell>验收方法</cell><cell>性质</cell></row>
+      <row><cell>2</cell><cell>A/B 选一；ZIP；真实开源仓库与开发记录；11 月 24 日 23:55 截止</cell><cell>打包、Git、报告</cell><cell>ZIP 内容；本地实际提交；远程 URL 待填写</cell><cell>课程要求</cell></row>
+      <row><cell>3</cell><cell>姓名_学号_EX1A；源码、MP4、PDF/docx；报告含 Git 链接</cell><cell>交付脚本</cell><cell>目录校验；视频未完成状态明确</cell><cell>课程要求</cell></row>
+      <row><cell>5、9</cell><cell>带 GUI 的网络嗅探器；必须完成 NPS</cell><cell>npcap、capture、gui</cell><cell>真实抓包、停止、重启、窗口事件循环</cell><cell>核心要求</cell></row>
+      <row><cell>9</cell><cell>完善 NPA，识别应用报文；Wireshark 开发加分</cell><cell>protocols、http、Lua</cell><cell>非标准端口 HTTP；真实 TShark 加载</cell><cell>鼓励与加分</cell></row>
+      <row><cell>10、12</cell><cell>网卡选择示例</cell><cell>npcap、gui</cell><cell>名称、描述、IPv4/IPv6、loopback</cell><cell>采纳的示例</cell></row>
+      <row><cell>11</cell><cell>包列表、协议详情、二进制视图</cell><cell>gui</cell><cell>实际 Qt 控件与数据模型验证</cell><cell>采纳的示例</cell></row>
+      <row><cell>13</cell><cell>进程追踪示例</cell><cell>processes、streams</cell><cell>单进程三条 TCP 流、真实退出</cell><cell>示例与加分</cell></row>
+      <row><cell>14</cell><cell>OSI、捕获位置、HTTPS 可见性</cell><cell>分层解析、报告</cell><cell>说明链路类型与 TLS 可见边界</cell><cell>课程要求</cell></row>
+      <row><cell>14</cell><cell>HTTP/TCP/UDP/IP/ICMP 与逻辑过滤</cell><cell>filters、Npcap BPF</cell><cell>过滤语义；原始 PCAP 数据保持</cell><cell>课程要求</cell></row>
+      <row><cell>14</cell><cell>端点组成 TCP 流；某进程全部 TCP 流</cell><cell>streams、processes</cell><cell>双向归并、生命周期、PID 筛选</cell><cell>课程加分</cell></row>
+      <row><cell>15</cell><cell>GUI 与 libpcap/Npcap API 调用</cell><cell>ctypes、PySide6</cell><cell>签名、结构大小、资源释放、实际包</cell><cell>推荐路径</cell></row>
+      <row><cell>21–29</cell><cell>BPF 与捕获性能背景</cell><cell>有界队列、统计</cell><cell>丢弃计数、持续抓包响应测量</cell><cell>教学背景</cell></row>
+      <row><cell>64、65</cell><cell>排错方法；理解核心代码；AI 分工</cell><cell>本报告、答辩稿</cell><cell>证据与原理解释；如实记录 AI 辅助</cell><cell>课程建议</cell></row>
+    </table>
+    <para>用户额外要求已作为本次交付范围：标准 PCAP 往返、截断长度、独立显示过滤、DNS、跨段 HTTP、IPv6 扩展头、TCP 重组、GetExtendedTcpTable、PID 元数据配对、自定义 UDP Dissector 和进程 Postdissector、真实及离线测试。请求响应 Listener 属于已完成的增强。extcap 为选做，未实现。</para>
+  </section>
+
+  <section title="2　运行环境与模块架构">
+    <environment/>
+    <para>本机原有 Anaconda Python 3.11.4 的旧 Visual C++ 运行库无法加载所选 Qt，实际使用独立 Python 3.12.14 x64 环境 .venv312。没有更换操作系统、驱动或全局 Python。Npcap 设置限制管理员访问，因此实时测试在获准的管理员执行环境中完成。Wireshark 4.6.9 来自官方签名安装包，本地使用 portable 目录，交付 ZIP 不重新分发该安装包。</para>
+    <table widths="0.24,0.40,0.36">
+      <row><cell>模块</cell><cell>职责与接口</cell><cell>第三方边界</cell></row>
+      <row><cell>npcap.py</cell><cell>枚举设备、启动/BPF、读取原始包、驱动统计</cell><cell>ctypes 调用 Npcap；pefile 检查 DLL 位数</cell></row>
+      <row><cell>capture.py / models.py</cell><cell>不可变原始包；采集、解析、写入线程及队列</cell><cell>Python 标准库线程、队列</cell></row>
+      <row><cell>protocols.py / http.py / demo.py</cell><cell>分层边界检查、协议字段、HTTP 定界、教学协议</cell><cell>运行时协议字段由项目代码解析</cell></row>
+      <row><cell>filters.py</cell><cell>独立显示过滤语法与匹配</cell><cell>Lark 负责语法树；不使用 eval</cell></row>
+      <row><cell>streams.py</cell><cell>会话代次、区间重组、事件与 HTTP 上下文</cell><cell>项目实现</cell></row>
+      <row><cell>processes.py</cell><cell>IPv4/IPv6 TCP 表、进程身份与时间关联</cell><cell>IP Helper API 和 psutil 提供操作系统数据</cell></row>
+      <row><cell>storage.py</cell><cell>PCAP、SQLite、配套 JSON 与校验</cell><cell>Scapy 读写成熟 PCAP 格式；标准库数据库/JSON</cell></row>
+      <row><cell>gui.py / flow_gui.py</cell><cell>网卡控制、包表、分层树、字节、流与统计</cell><cell>PySide6/Qt 控件和事件循环</cell></row>
+      <row><cell>wireshark/*.lua</cell><cell>教学协议、进程字段、请求响应统计</cell><cell>Wireshark Lua；dkjson 和 sha2</cell></row>
+      <row><cell>tests / tools</cell><cell>真实和离线验收、报告、完整交付打包</cell><cell>pytest、TShark、ReportLab、pypdf</cell></row>
+    </table>
+    <para>开发顺序为 NPS 与 GUI、NPA、TCP/PID、Wireshark 插件、验收和报告。基础抓包和协议分析不启动 TShark。TShark 仅承担插件执行与交叉验证，Python 程序自身提供 HTTP 重组和 TLS 记录层信息。</para>
+    <para>普通网卡在链路层附近提供 Ethernet 帧；loopback 接口返回自己的链路格式。代码依据 pcap_datalink 分派。OSI 第二层对应 Ethernet/VLAN，第三层对应 ARP、IPv4/IPv6 和 ICMP，第四层对应 TCP/UDP；DNS、HTTP、LABDEMO 为应用协议。TLS 跨越传统分层边界，在这里展示其可见记录和握手类型。程序不会从被动加密流量得到 HTTPS 明文。</para>
+  </section>
+
+  <section title="3　NPS、GUI 与数据完整性">
+    <para>Npcap 从 System32/Npcap/wpcap.dll 与 Packet.dll 的明确路径加载，验证 PE Machine=AMD64；使用 CDLL cdecl 调用约定并声明每个函数的 argtypes/restype。Windows LLP64 的 long 为 32 位，timeval 采用两个 int32。启动时检查 Timeval=8、pcap_pkthdr=16、bpf_program=16、地址记录=40、设备记录=40、IPv4 sockaddr=16、IPv6 sockaddr=28 字节和关键偏移。真实捕获时间戳与系统当前时间比较已经通过。</para>
+    <para>枚举结果复制名称、描述和地址后调用 pcap_freealldevs；BPF 经 pcap_compile、pcap_setfilter 后始终调用 pcap_freecode；捕获句柄由其所属采集线程在退出时 pcap_close。读取函数返回的字节在下一次调用前复制到 Python bytes，避免保留驱动临时指针。构造过程中任何必需设置失败立即关闭句柄并报告。</para>
+    <para>捕获长度为 64–262144 字节，驱动缓冲 1–256 MiB，超时 1–10000 ms，可选混杂模式。激活后设置非阻塞读取；空闲时等待最多 5 ms 再检查停止事件，因此停止不依赖新包到达。驱动激活警告保留在采集实例中，错误显示明确原因。</para>
+    <para>RawPacket 保留原始编号、纳秒时间、data、wirelen、linktype；caplen 从实际字节数计算。采集、解析和磁盘各自执行，raw/disk/gui 三个队列均有 2048 条上限。GUI 定时器每 100 ms 处理最多 300 包或 25 ms，并保留 5000 包/32 MiB 原始数据窗口。导出由独立线程完成。</para>
+    <para>采集队列满时记录 capture_queue_drops；GUI 队列满时记录 gui_queue_drops，磁盘写入仍继续；磁盘队列使用反压。状态栏分别报告已捕获、解析、显示、保存、字节量、平均速率、驱动丢包、接口丢包和窗口淘汰。接口统计无法证明可用时显示未知。会话磁盘上限 256 MiB，元数据 64 MiB，达到范围后停止对应操作并报告，不能无限占用资源。</para>
+    <para>列表提供编号、时间、源/目的地址、源/目的端口、协议、线上/捕获长度和摘要；不适用字段为空。选择数据包后显示分层协议树与十六进制/ASCII。流表显示双端点、双向计数、状态、起止时间、进程与关联状态。清空只清除显示窗口，停止后导出完整会话，重新开始创建新的会话目录。</para>
+    <para>标准 PCAP 通过 Scapy RawPcapReader/RawPcapWriter 读写，保留纳秒时间与原始字节。DLT_NULL=0 必须显式设置，以避免第三方构造函数的真值分支忽略零；DLT_RAW=12 写文件时映射为 LINKTYPE_RAW=101。读取时验证记录长度、时间小数、snaplen 和文件限制。PCAPNG 和压缩 PCAP 需先转换或解压；PCAPNG 多接口信息没有在本程序中实现。</para>
+  </section>
+
+  <section title="4　协议识别与过滤">
+    <para>基础解析支持 Ethernet、最多八层 VLAN、ARP、IPv4、IPv6、TCP、UDP、ICMP、ICMPv6。链路类型支持 Ethernet=1、NULL=0、LOOP=108、RAW=12/101、直接 IPv4=228 与 IPv6=229。每次读取字段和有效载荷前检查实际长度；报头和应用报文异常写入解析提示，保留已知字段与原始字节。</para>
+    <para>IPv4 使用 IHL 与总长度定位，有 TCP/IP 选项原始字段；IPv6 迭代 Hop-by-Hop、Routing、Destination Options、Fragment、AH，最多十六个扩展头，ESP 保留为加密载荷。IP 分片不重组：首片和后续片均标记，避免误当完整传输报文；IPv6 原子分片允许继续。IPv6 jumbogram 未实现。</para>
+    <para>DNS 支持 UDP 53 的事务编号、查询名、类型、响应码和 A/AAAA/NS/CNAME/PTR/MX/TXT 常见回答。名称解析检查标签长度、总长度、指针越界及循环，记录数上限 512。TCP DNS、DoH、DoT 未实现。TLS 展示记录类型、版本、声明长度和可见握手类型，未解析完整 ClientHello、证书或加密应用内容。</para>
+    <para>HTTP 识别依赖 TCP 连续区间及合法请求/响应起始行和头部。端口 80 无法单独触发 HTTP；真实测试覆盖 80、18080、IPv6 18081。跨段头部在缺口补齐后识别，完成识别的包拥有 HTTP 字段；较早的分段包仍保留 TCP 标签。流窗口提供完整重组头部、方法、路径、版本、Host、响应码、头部字典与正文预览。</para>
+    <para>HTTP 支持 Content-Length、单一 chunked 编码、trailer、按连接关闭定界、流水线、HEAD 响应和 CONNECT/101 协议切换边界。头部 64 KiB，正文分析 256 KiB，预览 4096 字节，每方向最多 128 个消息。冲突 Content-Length、Transfer-Encoding 与 Content-Length 同现、未知传输编码和缺口均显示状态。正文不解压 gzip，也不实现 HTTP/2 或 HTTP/3。巨大十进制长度先检查位数，避免畸形输入导致整数转换异常。</para>
+    <para>抓包过滤使用 Npcap 的 BPF 语法，如 tcp or udp port 53，生效位置在抓包路径。显示过滤使用项目自己的字段语言，仅筛选内存中已解析的包。两者的过滤结果不具有相同的保存语义：显示过滤后的导出仍是完整捕获会话。</para>
+    <code>tcp and (port == 80 or port == 18080)
+addr == "127.0.0.1" and not udp
+http and http.method == "GET"
+tcp.stream == 0
+pid == 12345
+process.name == "python.exe"
+frame.truncated or ip.fragmented</code>
+    <para>显示语法支持 and/or/not、括号、== != &gt; &gt;= &lt; &lt;=、非负整数、双引号字符串和协议存在性；最多 1024 字符、32 层嵌套。支持 port、addr、src/dst、IPv4/IPv6 地址、TCP/UDP 端口、tcp.stream/flags/seq/ack、frame.number/original_number/len/caplen、dns.id/rcode、http.method/path/host/version/status、pid、process.name/status、vlan.id 和 labdemo.type/request_id。缺失字段比较为假，多值相等任一匹配即可，多值不等要求全部不等且有值。不支持 Wireshark 全部语法、CIDR、正则和 contains，禁止 eval。</para>
+  </section>
+
+  <section title="5　TCP 重组和本机进程观察">
+    <para>TCP 连接键由 IP 版本及规范化双向端点组成；双向数据进入同一流，首次观察方向定义 A/B。SYN、初始序号、关闭或 RESET 状态以及 120 秒空闲阈值决定新代次。新 SYN 的 ISN 改变或前代已关闭时创建新流。未观察 SYN 的流标为 MIDSTREAM；没有握手证据且同一端点迅速复用时无法保证完全区分，保留这一限制。</para>
+    <para>每个方向以模 2^32 的相对序号管理有序区间，SYN 占用一个序号。乱序段仅填入对应区间，相邻区间合并；重传重复字节只计数；重叠首次观察值保留，冲突字节单独计数。只将连续前缀提交 HTTP 分析。缺口、缺少 SYN、截断或保留限制、重叠冲突均表示重组不完整。文本和十六进制追踪窗口明确显示缺口位置与长度。FIN 帮助判断尾部缺失与正文关闭边界。</para>
+    <para>每方向最多 256 KiB/4096 区间，全局有效载荷 32 MiB，最多 512 个流；每流时间线保留 256 个事件，包括 SYN/SYN-ACK、ACK、DATA、FIN、RST。超出内存保留范围后记录限制或淘汰，可从磁盘文件重新分析。包数和线上字节数统计所有观察到的 TCP 包，重复包也计入；重组字节只保存区间首次观察值。</para>
+    <para>Windows GetExtendedTcpTable 使用 TCP_TABLE_OWNER_PID_ALL=5，分别查询 AF_INET 与 AF_INET6。先获取缓冲大小，按返回大小分配；记录结构分别为 24/56 字节，记录起始偏移为 4 字节，校验数量不越界。端口和地址依 Microsoft 声明转换字节序。psutil 读取进程名和创建时间，并验证进程仍存在。</para>
+    <para>采样周期为 200 ms，保留八个快照。关联使用包时间附近 500 ms 内的完整双向端点与 IP 版本，同时排除无 owner 的状态。进程创建时间必须早于包时间；同端点出现不同 PID/创建时间组合时标为 uncertain_reuse；最新快照已不包含既有连接时标为 uncertain_stale。IPv6 scope 缺少充分证据时标为 uncertain_scope。进程退出、权限错误、未采到短连接和非本机连接保留未知或不确定，不猜测 PID。</para>
+    <para>observed 表示时间邻近的操作系统观察，无法证明采样间隔内绝无端口/PID 复用。回环连接两端都属于本机，可能记录两个 owner；远端进程无法从网络字段推断。已经保存的关联记录在进程退出后作为历史证据保留。UDP PID 映射未实现，非 TCP 包标为 not_tcp。</para>
+  </section>
+
+  <section title="6　实际 Wireshark 二次开发">
+    <para>labdemo.lua 注册 UDP Dissector 和 heuristic，以 ProtoField 加入可筛选字段；labproc.lua 注册 Postdissector，将经过配对校验的本机进程证据加入协议树；labdemo_stats.lua 通过 Listener 读取协议字段，增加请求响应统计与菜单。三个脚本均已通过实际 TShark 加载和字段检查，详见后面的逐项验收。</para>
+    <table widths="0.14,0.14,0.25,0.47">
+      <row><cell>偏移</cell><cell>字节数</cell><cell>LABDEMO 字段</cell><cell>约束</cell></row>
+      <row><cell>0</cell><cell>4</cell><cell>magic</cell><cell>ASCII LAB1</cell></row>
+      <row><cell>4</cell><cell>1</cell><cell>version</cell><cell>1</cell></row>
+      <row><cell>5</cell><cell>1</cell><cell>type</cell><cell>1 请求，2 成功响应，3 错误响应</cell></row>
+      <row><cell>6</cell><cell>4</cell><cell>request_id</cell><cell>无符号 32 位，网络字节序</cell></row>
+      <row><cell>10</cell><cell>2</cell><cell>payload_length</cell><cell>0–4096，网络字节序，精确等于剩余字节数</cell></row>
+      <row><cell>12</cell><cell>变长</cell><cell>payload</cell><cell>一个 UDP 数据报一个消息，教学工具使用 UTF-8 文本</cell></row>
+    </table>
+    <para>默认 UDP 端口 45990。正常请求响应保持请求编号；错误魔数保留普通 UDP；正确魔数但错误头部、版本、长度或类型产生显式错误，valid=false。正常请求 1001/1006 回复 ACK，错误魔数 1002 无响应，非法长度 1003 无响应，未知类型 1004 收到 type=3，timeout 请求 1005 用于超时演示。本地工具只绑定 loopback，不涉及实验 1B。</para>
+    <para>字段包括 labdemo.type、labdemo.request_id、labdemo.length、labdemo.payload、labdemo.valid、labdemo.error。有效请求过滤为 labdemo.type == 1 &amp;&amp; labdemo.valid == 1。Wireshark 布尔字段名称单独出现只检查字段存在，因此判断真假使用 == 1 或 == 0。</para>
+    <para>请求载荷可达到 4096 字节。如果增加 ACK: 后超过响应载荷上限，服务端返回 type=3、载荷 response too large，并继续服务；该边界使用真实 UDP 请求验证。</para>
+    <para>进程 JSON schema=1 包含会话 UUID、PCAP SHA256、链路类型、保存包数及有序包记录；每条记录保存原始捕获编号、纳秒时间字符串、捕获/线上长度、原始字节 SHA256、流号、关联状态和 owner。owner 保存 PID、名称、创建时间、本地/远端端点、采样起止时间，process 保存关联时间。纳秒使用字符串避免 Lua 浮点精度损失。原始网络头部和载荷完全保持。</para>
+    <para>配对先验证指定 PCAP 全文件摘要，再逐帧核对当前打开文件的长度、时间戳和原始字节摘要。只有全部帧通过并进入重复解析才输出 PID；文件更换、过滤导出、删减、缺少元数据均不能产生误配。捕获原始号允许因队列丢弃出现缺口，重新导出保留 UUID 与原始号。摘要防止意外错配；格式没有数字签名，不能抵抗能同时修改两份文件的攻击者。</para>
+    <para>进程字段包括 labproc.pid/name/status/session/original_number/sample_ns/associated_ns/created/local。无元数据为 unknown_no_metadata，验证过程中为 pending_full_capture_validation。重新载入和首选项变更清除校验状态。重复过滤只复用该次完整文件校验，不重复统计。</para>
+    <para>加载方法：open_wireshark.ps1 -Capture 实际文件.pcap 使用 -X lua_script 加载所有项目脚本并传入配对文件。TShark 模式增加 -TShark，自动包含 -2 -R "frame.number &gt;= 1"，确保第一遍实际生成协议树。关闭该实例即可卸载本次加载。长期安装可把三个脚本和 vendor 复制到“帮助 → 关于 → 文件夹”列出的个人 Lua 插件目录内的 ucas_ex1a 子目录，重启；卸载删除该专用子目录。长期安装后不要同时使用 -X 重复注册。长期复制安装与 GUI 菜单交互未执行自动验收。</para>
+    <para>Wireshark GUI 完整载入后应用显示过滤或选择 Tools → UCAS → Refresh process fields。Listener 菜单位于 Statistics → UCAS → LABDEMO request response statistics。它按双向 UDP 端点和请求 ID 配对，按包号去重，统计请求/响应、配对、错误、无效消息、重复、超时、等待和平均 RTT。超时按捕获内最后有效消息时间超过两秒判断，尾部证据不足保持 pending；无配对平均值为 unknown。最多统计原始帧号 100000 以内，达到上限报告 limited。</para>
+  </section>
+
+  <section title="7　实际验收与证据">
+    <acceptance/>
+    <evidence/>
+    <para>真实流量证据由本机 socket、ping、Npcap 和 Windows 连接表产生。offline_labdemo.pcap 与 offline_tcp_gap_retransmission.pcap 是人工构造的边界样本，用于精确控制异常长度、乱序、重复、冲突和缺口。其来源与真实流量分别标记。测试没有使用 mock 替代 Npcap、Windows API、Qt 或 TShark。</para>
+    <para>同一份 PCAP 与 TShark 对照捕获/线上长度、IP 地址、TCP/UDP 端口、TCP 原始序号和 DNS ID；三个 HTTP 测试各验证三个 GET。非标准 HTTP 端口通过 TShark -d tcp.port==18080,http 或 18081,http 显式选择解码；自研识别依据结构。TCP 对照使用 tcp.seq_raw，避免 Wireshark 相对序号造成表面差异。显示包的高层标签可能因重组归属规则而不同，比较基于具体字段。</para>
+    <para>TShark 的外部 sinsp/Falco 云审计插件在本机存在加载警告，完整 stderr 已保存到 tshark-calls.jsonl；本项目 Lua 字段检查同时验证 _ws.lua.error 为空。界面通过实际事件循环和控件状态测试，遵循用户限制未采集或检查截图，因此没有宣称视觉版式或菜单交互已验证。</para>
+  </section>
+
+  <section title="8　运行与复现命令">
+    <para>在 Windows 11 x64 安装 Python 3.12 x64、Npcap 和 Microsoft Visual C++ x64 运行库。开发/验收额外安装 Wireshark。解压后进入源码目录，执行下列 PowerShell 命令。需要管理员的环境应在管理员终端操作；不要绕过系统脚本策略。路径参数和实际 PID 根据当前机器填写。</para>
+    <code>.\setup.ps1 -PythonExe 'C:\实际位置\python.exe' -Development
+.\start.ps1
+.\.venv312\Scripts\python.exe -m labsniffer.cli devices
+.\.venv312\Scripts\python.exe -m labsniffer.traffic --port 18080 --flows 3
+.\.venv312\Scripts\python.exe -m labsniffer.traffic --host ::1 --port 18081 --flows 3
+.\.venv312\Scripts\python.exe -m labsniffer.demo exercise
+.\run_tests.ps1
+.\run_tests.ps1 -Offline
+.\open_wireshark.ps1 -Capture '.\实际样例.pcap' -TShark</code>
+    <para>完整验收使用本机 53、80、18080、18081、18082、45990 与动态端口，端口占用会报告失败。setup.ps1 安装固定版本 requirements；start.ps1 调用 .venv312。TSHARK_PATH 与 WIRESHARK_PATH 可指向已有安装。离线模式未执行的检查明确记为未验证。</para>
+    <para>演示顺序：选择 loopback 和 BPF；产生三条 HTTP 流；查看协议树和字节；切换显示过滤；跟踪跨段 HTTP 和时间线；按实际 PID 查看多个流；运行 LABDEMO；停止并导出；在 Wireshark 查看 labdemo 与 labproc；打开 Listener；展示离线缺口样本与实际日志。录制步骤和逐段讲解见交付的录制步骤与答辩.md；MP4 尚未制作。</para>
+  </section>
+
+  <section title="9　限制、排错和验收边界">
+    <para>已知功能边界包括：仅标准单链路 PCAP；IP 分片不重组；DNS 仅 UDP；HTTP/1.x 有界分析，正文仅预览且不解压；TLS 无解密；TCP 内存窗口有界；PID 依赖本机同期采样且有时间误差；IPv6 scope 证据不足保持不确定；extcap 未实现。连续抓包文件达到配置上限后停止并提示。重开 PCAP 可以重新分析保留窗口，但不能恢复从未捕获或已被驱动丢弃的数据。</para>
+    <para>排错证据：Qt 动态库加载需使用兼容的 Python/Visual C++ 运行环境；Npcap 管理员限制导致普通受限进程无法打开接口；PCAP DLT_NULL 数值零需要显式保留；TShark 进程字段要求 -2 与生成协议树的 -R 参数；纳秒时间比较使用 FieldInfo 的 NSTime 成分，避免双精度绝对时间误差；Windows 虚拟环境启动器 PID 与实际 Python PID 可以不同，真实退出测试使用流量进程自行报告的 os.getpid 与捕获证据比较。</para>
+    <para>未强制制造真实网络的乱序、重传、丢包、PID 复用和权限拒绝；这些情况的实现边界与已覆盖离线样本已分别说明。外部 Ethernet 实时流量、极限带宽、Wireshark GUI 菜单交互、视觉布局和实际录屏未验证。报告中的本机性能数字只对应本次测试条件。测试 PASS 不能扩展为未测环境的保证。</para>
+    <para>缺少驱动时 GUI 保留离线使用；权限、接口、BPF、文件长度或配对校验失败时明确显示原因。失败不会返回伪造 PID、伪造零丢包或成功状态。后台程序错误写入 output/application.log，验收错误写入独立 pytest.log。验证使用隔离输出目录，没有修改用户真实抓包。</para>
+  </section>
+
+  <section title="10　原创范围、第三方来源与技术依据">
+    <para>项目代码包括 Npcap 绑定、分层字段分析、自定义显示过滤匹配、TCP 区间重组、进程时间关联、GUI、配对元数据及三个 Lua 扩展。Scapy 提供成熟 PCAP 格式读写和离线样本；Lark 解析过滤语言；Qt 提供 GUI；psutil 查询进程属性；dkjson 解析 JSON；sha2.lua 提供摘要算法。第三方代码的作者和许可证保留，不能把依赖算法称为本项目原创。</para>
+    <para>Npcap：Nmap Project 官方 Developer's Guide 与 wpcap 手册，核对实际 1.90 / libpcap 1.10.7 环境；https://npcap.com/guide/npcap-devguide.html 和 https://npcap.com/guide/wpcap/ 。配合 libpcap pcap.h、bpf.h 的 Windows 声明检查 ABI，实测时间戳和结构偏移。</para>
+    <para>Windows：Microsoft Learn，GetExtendedTcpTable、MIB_TCPROW_OWNER_PID、MIB_TCP6ROW_OWNER_PID；对应页面标注更新日期 2022-08-31，适用 Windows IP Helper API。https://learn.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getextendedtcptable ；https://learn.microsoft.com/en-us/windows/win32/api/tcpmib/ns-tcpmib-mib_tcprow_owner_pid ；https://learn.microsoft.com/en-us/windows/win32/api/tcpmib/ns-tcpmib-mib_tcp6row_owner_pid 。</para>
+    <para>Wireshark：Wireshark Foundation 官方 Developer's Guide Lua API 和 4.6.9 项目源码；https://www.wireshark.org/docs/wsdg_html_chunked/wsluarm_modules.html 。实际使用 Proto、ProtoField、register_postdissector、Field、Listener、register_menu、TextWindow。在线文档随版本变化，兼容性结论限定为实际测试的 4.6.9/Lua 5.4.6。</para>
+    <para>dkjson：David Heiko Kolf，2.11，2026-07-27；https://dkolf.de/dkjson-lua/ ，MIT。sha2.lua：Egor Skriptunoff，v12，2022-02-23；https://github.com/Egor-Skriptunoff/pure_lua_SHA ，MIT。vendored 文件摘要与完整第三方清单在 THIRD_PARTY_NOTICES.md，源码版权说明保留。</para>
+    <para>运行依赖：PySide6-Essentials/shiboken6 6.12.0（Qt 许可）；Scapy 2.8.0（GPL-2.0-only）；Lark 1.3.1（MIT）；psutil 7.2.2（BSD-3-Clause）；pefile 2024.8.26（MIT）。验证/报告使用 pytest 9.2.0、pypdf 7.1.0、ReportLab 5.1.0。Npcap 和 Wireshark 独立安装，ZIP 中不分发其二进制安装包。</para>
+  </section>
+
+  <section title="11　答辩准备">
+    <para>应能解释：为什么 DLT_NULL 和 Ethernet 需要不同解析入口；为什么 wirelen 与 caplen 分开；如何在无流量时结束非阻塞捕获；BPF 和显示过滤对文件保存的影响；为什么协议识别需要结构和上下文；模 2^32 TCP 序号如何处理回绕；重叠首次观察策略的局限；HTTP 消息定界和缺口的关系；PID 创建时间和端点采样如何限制错误关联；为什么普通 PCAP 没有进程身份；Lua 的 Dissector、Postdissector、Listener 各新增什么能力。</para>
+    <para>检查核心实现时，从 npcap.py 的函数签名和资源释放开始，沿 RawPacket、CaptureEngine 的三个队列进入 protocols.py，再进入 streams.py 的区间插入和 processes.py 的候选身份检查，最后查看 storage.py 和 labproc.lua 的配对证据。必须能把每条判断与测试中的具体报文、时间或字段对应，不能只背诵界面操作。</para>
+  </section>
+
+  <section title="12　真实开发记录和交付状态">
+    <history/>
+    <para>ZIP 顶层采用 姓名待填写_学号待填写_EX1A；内含同前缀源码目录、实验报告 PDF、视频尚未完成.txt。源码含启动脚本、固定依赖、全部模块、Lua 与第三方许可证、测试、样例、验收记录、录制讲解稿和真实 Git bundle。提交前填写姓名、学号、真实远程仓库 URL，录制并检查实际 MP4 后放入目录。未授权发布远程仓库，因此没有编造链接。</para>
+    <para>本报告由 ReportLab 生成并通过 pypdf 读取文本、页面尺寸和核心内容检查。依据用户限制没有使用视觉功能，报告视觉检查未执行。交付脚本另行验证 ZIP CRC、必要文件与源码编译，检查结果保存为 delivery-check.json。</para>
+  </section>
+</report>

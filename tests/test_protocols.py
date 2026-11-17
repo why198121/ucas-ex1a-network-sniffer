@@ -1,6 +1,6 @@
 import struct
 
-from scapy.layers.dns import DNS, DNSQR, DNSRR
+from scapy.layers.dns import DNS, DNSQR, DNSRR, dns_compress
 from scapy.layers.inet import ICMP, IP, TCP, UDP
 from scapy.layers.inet6 import IPv6, IPv6ExtHdrDestOpt, IPv6ExtHdrFragment, ICMPv6EchoRequest
 from scapy.layers.l2 import ARP, Dot1Q, Ether, Loopback
@@ -38,7 +38,7 @@ def test_ipv6_extensions_and_fragment_safety():
 
 def test_dns_compression_and_bounds():
     dns = DNS(id=123, qr=1, qd=DNSQR(qname="example.test"), an=DNSRR(rrname="example.test", rdata="192.0.2.8"))
-    packet = parse(Ether()/IP()/UDP(sport=53, dport=40000)/dns)
+    packet = parse(Ether()/IP()/UDP(sport=53, dport=40000)/dns_compress(dns))
     assert packet.protocol == "DNS"
     assert packet.fields["dns.id"] == 123
     assert "192.0.2.8" in str(packet.layers["DNS"])

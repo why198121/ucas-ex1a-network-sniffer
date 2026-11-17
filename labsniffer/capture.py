@@ -76,12 +76,16 @@ class CaptureEngine:
     def _capture(self):
         if self.source:
             self.metadata = load_metadata(self.source)
+            records = 0
             for raw in PcapFile.read(self.source):
                 if self.stop_event.is_set():
                     break
                 if self.linktype is None:
                     self.linktype = raw.linktype
+                    if self.metadata and self.metadata["linktype"] != self.linktype:
+                        raise ValueError("进程元数据的链路类型不一致")
                     self.ready.set()
+                records += 1
                 self._count(raw)
                 while not self.stop_event.is_set():
                     try:
@@ -89,6 +93,8 @@ class CaptureEngine:
                         break
                     except queue.Full:
                         continue
+            if self.metadata and not self.stop_event.is_set() and records != self.metadata["packet_count"]:
+                raise ValueError("抓包文件与进程元数据的包数不一致")
             return
         api = Npcap()
         with api.open(self.config) as capture:

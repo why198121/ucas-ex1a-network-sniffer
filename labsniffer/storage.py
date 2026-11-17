@@ -1,4 +1,5 @@
 import hashlib
+import gzip
 import json
 import shutil
 import sqlite3
@@ -51,6 +52,8 @@ class PcapFile:
             raise ValueError("PCAP 超出本程序 256 MiB 单会话上限")
         try:
             with RawPcapReader(str(path)) as reader:
+                if isinstance(reader.f, gzip.GzipFile):
+                    raise ValueError("请先解压缩 PCAP 文件")
                 if type(reader) is not RawPcapReader:
                     raise ValueError("仅支持标准 PCAP；PCAPNG 请使用 editcap -F pcap 转换")
                 if not 1 <= reader.snaplen <= 262144:

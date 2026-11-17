@@ -91,7 +91,9 @@ def inspect_http(data, closed=False, request_methods=()):
             if len(set(lengths)) != 1 or not re.fullmatch(r"[0-9]+", lengths[0]):
                 state = "Content-Length 非法或冲突"
             else:
-                length = int(lengths[0])
+                digits = lengths[0].lstrip("0") or "0"
+                # 先限制十进制位数，避免畸形报头触发 Python 的超长整数转换异常。
+                length = int(digits) if len(digits) <= 6 else MAX_BODY + 1
                 preview = data[body_start:body_start + min(length, 4096)]
                 if length > MAX_BODY:
                     state = "正文超过分析上限"

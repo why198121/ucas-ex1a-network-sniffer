@@ -52,9 +52,9 @@ local function report()
     for _, timestamp in pairs(pending) do
         if last_time - timestamp >= 2 then timeout = timeout + 1 else waiting = waiting + 1 end
     end
-    return string.format("LABDEMO_STATS requests=%d responses=%d pairs=%d errors=%d invalid=%d duplicates=%d timeout=%d pending=%d mean_rtt_ms=%.6f limited=%s",
+    return string.format("LABDEMO_STATS requests=%d responses=%d pairs=%d errors=%d invalid=%d duplicates=%d timeout=%d pending=%d mean_rtt_ms=%s limited=%s",
         requests, responses, pairs_count, errors, invalid, duplicates, timeout, waiting,
-        pairs_count > 0 and total_rtt * 1000 / pairs_count or 0, tostring(limited))
+        pairs_count > 0 and string.format("%.6f", total_rtt * 1000 / pairs_count) or "unknown", tostring(limited))
 end
 
 function listener.draw()

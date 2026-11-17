@@ -42,6 +42,10 @@ def tshark(arguments, scripts=("labdemo.lua", "labproc.lua")):
         command += ["-X", f"lua_script:{ROOT / 'wireshark' / script}"]
     command += list(map(str, arguments))
     result = subprocess.run(command, capture_output=True, encoding="utf-8", errors="replace", timeout=45)
+    evidence = Path(os.environ.get("LAB_EVIDENCE_DIR", ROOT / ".work/test-evidence"))
+    evidence.mkdir(parents=True, exist_ok=True)
+    with (evidence / "tshark-calls.jsonl").open("a", encoding="utf-8") as log:
+        log.write(json.dumps({"command": command, "exit_code": result.returncode, "stderr": result.stderr}, ensure_ascii=False) + "\n")
     assert result.returncode == 0, result.stderr
     assert "Lua Error" not in result.stderr and "Lua: " not in result.stderr, result.stderr
     return result

@@ -21,6 +21,7 @@ class Reassembly:
         self.conflict_bytes = 0
         self.limited = False
         self.fin_position = None
+        self.capture_truncated = False
 
     def add(self, sequence, data, syn=False, fin=False):
         payload_sequence = (sequence + int(syn)) & 0xFFFFFFFF
@@ -95,7 +96,8 @@ class Reassembly:
         return {"segments": list(self.segments), "data": contiguous, "gaps": gaps,
                 "missing_prefix": not self.syn_seen, "limited": self.limited,
                 "duplicate_bytes": self.duplicate_bytes, "conflict_bytes": self.conflict_bytes,
-                "incomplete": bool(gaps) or not self.syn_seen or self.limited or bool(self.conflict_bytes),
+                "capture_truncated": self.capture_truncated,
+                "incomplete": bool(gaps) or not self.syn_seen or self.limited or bool(self.conflict_bytes) or self.capture_truncated,
                 "fin_seen": self.fin_position is not None}
 
     def discard(self):
@@ -178,6 +180,8 @@ class StreamManager:
         elif flags & 16 and flow.state in ("SYN_SENT", "SYN_ACK"):
             flow.state = "ESTABLISHED" if len(flow.syn_sequences) == 2 else "PARTIAL_HANDSHAKE"
         flow.directions[direction].add(sequence, packet.payload, bool(flags & 2), bool(flags & 1))
+        if packet.raw.caplen < packet.raw.wirelen:
+            flow.directions[direction].capture_truncated = True
         if flags & 1:
             flow.fin_directions.add(direction)
             flow.state = "CLOSED" if len(flow.fin_directions) == 2 else "HALF_CLOSED"
@@ -192,6 +196,8 @@ class StreamManager:
         for index in range(2):
             methods = [message["method"] for message in flow.http[1 - index] if "method" in message]
             flow.http[index] = inspect_http(views[index]["data"], closed=views[index]["fin_seen"] and not views[index]["gaps"], request_methods=methods)
+            for message in flow.http[index]:
+                message["reassembly_incomplete"] = views[index]["incomplete"]
         if flow.http[direction] and packet.payload:
             message = flow.http[direction][-1]
             packet.layer("HTTP", message)

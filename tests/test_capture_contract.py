@@ -21,3 +21,14 @@ def test_corrupt_file_rejected(tmp_path):
     path.write_bytes(b"not a capture")
     with pytest.raises(ValueError, match="PCAP"):
         list(PcapFile.read(path))
+
+
+def test_truncated_record_header_and_payload_rejected(tmp_path):
+    path = tmp_path / "record.pcap"
+    with PcapFile.writer(path, 1) as writer:
+        writer.append(RawPacket(1, 1_790_000_000_123_456_000, b"payload", 64, 1))
+    complete = path.read_bytes()
+    for cut in (25, 39, len(complete) - 1):
+        path.write_bytes(complete[:cut])
+        with pytest.raises(ValueError, match="PCAP"):
+            list(PcapFile.read(path))

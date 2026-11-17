@@ -1,4 +1,6 @@
 import argparse
+import json
+import os
 import queue
 import socket
 import threading
@@ -107,7 +109,8 @@ def main():
         parser.error("flows 必须为 1–16")
     with HttpLab(args.host, args.port) as lab:
         responses = lab.exercise(args.flows)
-        print(f"PASS: {args.host}:{lab.port} 完成 {len(responses)} 条 TCP 流，包含跨段 HTTP 报头")
+        print(json.dumps({"status": "PASS", "pid": os.getpid(), "host": args.host, "port": lab.port,
+                          "flows": len(responses), "split_headers": True}))
 
 
 if __name__ == "__main__":

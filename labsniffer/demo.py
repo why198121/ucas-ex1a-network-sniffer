@@ -61,7 +61,11 @@ class DemoServer:
                 elif message["valid"] and message["type"] == 1:
                     if message["payload"] == "timeout":
                         continue
-                    self.socket.sendto(encode(2, message["request_id"], b"ACK:" + data[HEADER.size:]), address)
+                    payload = b"ACK:" + data[HEADER.size:]
+                    if len(payload) > 4096:
+                        self.socket.sendto(encode(3, message["request_id"], b"response too large"), address)
+                    else:
+                        self.socket.sendto(encode(2, message["request_id"], payload), address)
         except Exception as error:
             self.error = error
 

@@ -37,3 +37,9 @@ def test_chunked_body_and_conflicting_lengths():
     assert "冲突" in malformed["body_state"]
     head = inspect_http(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n", request_methods=["HEAD"])[0]
     assert head["complete"]
+
+
+def test_untrusted_content_length_has_bounded_integer_conversion():
+    message = inspect_http(b"HTTP/1.1 200 OK\r\nContent-Length: " + b"9" * 10000 + b"\r\n\r\n")[0]
+    assert not message["complete"]
+    assert "上限" in message["body_state"]
