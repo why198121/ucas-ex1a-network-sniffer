@@ -76,6 +76,7 @@ class MainWindow(QMainWindow):
         self.history = []
         self.history_bytes = 0
         self.evicted = 0
+        self.display_floor = 0
         self.reported_error = ""
         self.filter_function = lambda packet: True
         self.parser = parse_packet
@@ -240,6 +241,7 @@ class MainWindow(QMainWindow):
 
     def begin(self, config=None, source=None):
         self.clear_display()
+        self.display_floor = 0
         self.reported_error = ""
         self.engine = self.make_engine(config, source)
         self.engine.start()
@@ -293,6 +295,7 @@ class MainWindow(QMainWindow):
             self.stop_button.setEnabled(False)
 
     def clear_display(self):
+        self.display_floor = self.engine.stats.captured + 1 if self.engine else 0
         self.history.clear()
         self.history_bytes = 0
         self.evicted = 0
@@ -321,7 +324,9 @@ class MainWindow(QMainWindow):
         deadline = time.monotonic() + 0.025
         while len(batch) < 300 and time.monotonic() < deadline:
             try:
-                batch.append(self.engine.gui_queue.get_nowait())
+                packet = self.engine.gui_queue.get_nowait()
+                if packet.raw.number >= self.display_floor:
+                    batch.append(packet)
             except queue.Empty:
                 break
         if batch:

@@ -11,7 +11,7 @@ def packet(number, seq, payload=b"", flags="PA", reverse=False, timestamp=None):
     src, dst, sport, dport = ("192.0.2.1", "192.0.2.2", 40000, 18080)
     if reverse:
         src, dst, sport, dport = dst, src, dport, sport
-    data = bytes(Ether()/IP(src=src, dst=dst)/TCP(sport=sport, dport=dport, seq=seq, flags=flags)/Raw(payload))
+    data = bytes(Ether(src="02:00:00:00:00:01", dst="02:00:00:00:00:02")/IP(src=src, dst=dst)/TCP(sport=sport, dport=dport, seq=seq, flags=flags)/Raw(payload))
     return parse_packet(RawPacket(number, timestamp or number * 1_000_000, data, len(data), 1))
 
 

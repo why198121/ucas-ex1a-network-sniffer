@@ -73,10 +73,10 @@ class PcapFile:
 
 
 class SessionWriter:
-    def __init__(self, directory, linktype):
+    def __init__(self, directory, linktype, session_id=None):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=False)
-        self.session_id = str(uuid.uuid4())
+        self.session_id = session_id or str(uuid.uuid4())
         self.linktype = linktype
         self.pcap = self.directory / "capture.pcap"
         self.db = sqlite3.connect(self.directory / "metadata.sqlite")
@@ -153,4 +153,12 @@ def load_metadata(pcap):
         raise ValueError("抓包文件与进程元数据配对校验失败")
     if metadata.get("packet_count") != len(metadata.get("packets", [])):
         raise ValueError("进程元数据包数不一致")
+    uuid.UUID(metadata["session_id"])
+    previous = 0
+    for record in metadata["packets"]:
+        if not isinstance(record, dict) or not isinstance(record.get("original_number"), int) or record["original_number"] <= previous:
+            raise ValueError("进程元数据原始包号必须严格递增")
+        previous = record["original_number"]
+        if not isinstance(record.get("process"), dict) or not isinstance(record["process"].get("status"), str) or not isinstance(record["process"].get("owners"), list):
+            raise ValueError("进程元数据缺少关联状态")
     return metadata

@@ -16,7 +16,7 @@ def parse(data, linktype=1, wirelen=None):
 
 
 def test_vlan_options_and_endpoints():
-    packet = parse(Ether()/Dot1Q(vlan=42)/IP(src="192.0.2.1", dst="192.0.2.2", options=b"\x01\x01\x01\x01")/
+    packet = parse(Ether(src="02:00:00:00:00:01", dst="02:00:00:00:00:02")/Dot1Q(vlan=42)/IP(src="192.0.2.1", dst="192.0.2.2", options=b"\x01\x01\x01\x01")/
                    TCP(sport=31000, dport=8080, flags="S", options=[("MSS", 1460)]))
     assert packet.protocol == "TCP"
     assert packet.fields["vlan.id"] == [42]

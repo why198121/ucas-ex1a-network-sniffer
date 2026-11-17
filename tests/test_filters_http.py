@@ -9,7 +9,7 @@ from labsniffer.protocols import parse_packet
 
 
 def test_display_filter_logic_and_validation():
-    data = bytes(Ether()/IP(src="192.0.2.1", dst="192.0.2.2")/TCP(sport=12000, dport=8080))
+    data = bytes(Ether(src="02:00:00:00:00:01", dst="02:00:00:00:00:02")/IP(src="192.0.2.1", dst="192.0.2.2")/TCP(sport=12000, dport=8080))
     packet = parse_packet(RawPacket(1, 0, data, len(data), 1))
     assert compile_filter('tcp and (port == 8080 or addr == "198.51.100.1") and not udp')(packet)
     assert not compile_filter("udp or port == 53")(packet)

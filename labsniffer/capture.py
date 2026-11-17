@@ -1,9 +1,10 @@
 import logging
+import hashlib
 import queue
 import threading
 import time
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from .models import CaptureStats, Packet
@@ -132,9 +133,14 @@ class CaptureEngine:
                 raw = self.raw_queue.get(timeout=0.05)
             except queue.Empty:
                 continue
-            packet = self.parser(raw)
             if self.metadata:
                 record = self.metadata["packets"][raw.number - 1]
+                if (record["timestamp_ns"] != str(raw.timestamp_ns) or record["caplen"] != raw.caplen
+                        or record["wirelen"] != raw.wirelen or record["sha256"] != hashlib.sha256(raw.data).hexdigest()):
+                    raise ValueError("进程元数据的逐包校验失败")
+                raw = replace(raw, number=record["original_number"])
+            packet = self.parser(raw)
+            if self.metadata:
                 packet.process = record["process"]
                 packet.fields["frame.original_number"] = record["original_number"]
             elif self.process_tracker:
@@ -163,7 +169,7 @@ class CaptureEngine:
         self.ready.wait()
         if self.linktype is None:
             return
-        writer = SessionWriter(self.directory, self.linktype)
+        writer = SessionWriter(self.directory, self.linktype, self.metadata["session_id"] if self.metadata else None)
         try:
             while not self.parse_done.is_set() or not self.disk_queue.empty():
                 if self.error:

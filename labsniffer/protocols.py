@@ -2,6 +2,7 @@ import ipaddress
 import struct
 
 from .models import Packet
+from .demo import decode as decode_demo
 
 
 class Malformed(ValueError):
@@ -229,6 +230,11 @@ def parse_transport(packet, data, protocol):
         packet.layer("UDP", {"srcport": packet.sport, "dstport": packet.dport, "length": length})
         packet.payload = data[8:min(length, len(data))]
         packet.summary = f"{packet.sport} → {packet.dport} UDP Len={length}"
+        demo = decode_demo(packet.payload)
+        if demo is not None:
+            packet.layer("LABDEMO", demo)
+            packet.summary = f"LABDEMO {demo.get('type', '')} ID={demo.get('request_id', '')} {demo.get('error', '')}"
+            return
         if 53 in (packet.sport, packet.dport):
             values = parse_dns(packet.payload)
             packet.layer("DNS", values)
