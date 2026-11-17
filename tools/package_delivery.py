@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from labsniffer.storage import PcapFile, load_metadata
+from labsniffer.cli import find_wireshark
 
 
 def git(*arguments):
@@ -29,6 +30,9 @@ def main():
     result = json.loads((acceptance / "results.json").read_text(encoding="utf-8"))
     if result["exit_code"] != 0:
         raise RuntimeError("验收存在失败，停止打包")
+    video = json.loads((ROOT / "output/video/latest.json").read_text(encoding="utf-8"))
+    if video["status"] != "PASS" or hashlib.sha256(Path(video["video"]).read_bytes()).hexdigest() != video["video_sha256"]:
+        raise RuntimeError("视频验收或文件摘要检查失败")
     outer_name = "姓名待填写_学号待填写_EX1A"
     source_name = "姓名待填写_学号待填写_ex1A_src"
     destination = ROOT / "dist" / time.strftime("delivery_%Y%m%d_%H%M%S")
@@ -71,18 +75,45 @@ def main():
     report = ROOT / "output/report/姓名待填写_学号待填写_ex1A_report.pdf"
     shutil.copy2(report, top / report.name)
     shutil.copy2(ROOT / "output/report/report-check.json", source / "evidence/report-check.json")
-    (top / "视频尚未完成.txt").write_text(
-        "演示视频尚未录制。录制操作与讲解稿位于源码 docs/录制步骤与答辩.md。\n"
-        "请实际运行并录制，完整播放检查后保存为 姓名_学号_ex1A_play.mp4。\n"
-        "提交前填写真实姓名、学号和远程 Git 仓库地址，重新生成报告与 ZIP。\n", encoding="utf-8")
+    shutil.copy2(video["video"], top / Path(video["video"]).name)
+    materials = top / "后期配音素材"
+    materials.mkdir()
+    for key, name in (("clean_video", "无字幕素材.mp4"), ("subtitles", "演示字幕.srt"),
+                      ("voiceover", "配音稿.txt"), ("mapping", "镜头与PDF对应表.md")):
+        shutil.copy2(video[key], materials / name)
+    video_evidence = source / "evidence/video"
+    video_evidence.mkdir()
+    video_directory = Path(video["directory"])
+    for name in ("recording-result.json", "video-check.json", "events.json", "traffic.json", "ffprobe.json",
+                 "capture-ffmpeg.log", "subtitle-render.log", "decode.log", "black-detection.log", "pid-fields.json",
+                 "tshark-fields.csv", "tshark-verification.json",
+                 "demo_capture.pcap", "demo_capture.pcap.labproc.json"):
+        shutil.copy2(video_directory / name, video_evidence / name)
+    for path in video_directory.glob("ui-*.json"):
+        shutil.copy2(path, video_evidence / path.name)
+    environment = json.loads((acceptance / "environment.json").read_text(encoding="utf-8"))
+    locations = ["本机文件位置说明", "以下绝对路径对应生成交付包的电脑；移动或解压到其他位置后，请使用相同目录中的文件。", "",
+                 f"Wireshark：{find_wireshark('Wireshark.exe')}", f"TShark：{find_wireshark('tshark.exe')}",
+                 f"Npcap DLL：{environment['npcap']['dll']}", f"开发工程：{ROOT}",
+                 f"启动嗅探器：{ROOT / 'start.ps1'}", f"加载课程插件：{ROOT / 'open_wireshark.ps1'}", "",
+                 f"提交 ZIP：{destination / (outer_name + '.zip')}", f"交付源码：{source}",
+                 f"带字幕视频：{top / Path(video['video']).name}", f"实验报告：{top / report.name}",
+                 f"无字幕素材：{materials / '无字幕素材.mp4'}", f"独立字幕：{materials / '演示字幕.srt'}",
+                 f"配音稿：{materials / '配音稿.txt'}", f"镜头对应表：{materials / '镜头与PDF对应表.md'}", "",
+                 f"本次抓包：{video_evidence / 'demo_capture.pcap'}",
+                 f"本次 PID 元数据：{video_evidence / 'demo_capture.pcap.labproc.json'}",
+                 f"Lua 插件：{source / 'wireshark'}", f"完整验收记录：{source / 'evidence/acceptance'}",
+                 f"视频检查记录：{video_evidence / 'video-check.json'}", "",
+                 "姓名、学号和真实远程仓库地址保留明确占位；视频没有配音，可使用配音稿与字幕完成后期录音。"]
+    (top / "文件位置说明.txt").write_text("\n".join(locations) + "\n", encoding="utf-8-sig")
     python_files = list(source.rglob("*.py"))
     for path in python_files:
         ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     check = {"status": "PASS", "git_head": git("rev-parse", "HEAD").strip(), "acceptance_run": result["run_id"],
              "tests": result["counts"], "python_files_syntax_checked": len(python_files), "samples_checked": manifest,
              "report_check": json.loads((ROOT / "output/report/report-check.json").read_text(encoding="utf-8")),
-             "uncompleted": ["真实姓名与学号", "真实远程仓库 URL", "实际演示 MP4"],
-             "scope": "源码语法、样例 PCAP 读取、配套摘要、报告内容检查、ZIP CRC"}
+             "video_check": video, "uncompleted": ["真实姓名与学号", "真实远程仓库 URL"],
+             "scope": "源码语法、样例 PCAP 读取、配套摘要、报告内容检查、实际录屏与字幕、ZIP CRC"}
     (source / "evidence/delivery-check.json").write_text(json.dumps(check, ensure_ascii=False, indent=2), encoding="utf-8")
     output = destination / f"{outer_name}.zip"
     with zipfile.ZipFile(output, "x", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
@@ -94,7 +125,8 @@ def main():
         if corrupt:
             raise RuntimeError(f"ZIP CRC 检查失败：{corrupt}")
         required = [f"{outer_name}/{source_name}/labsniffer/gui.py", f"{outer_name}/{source_name}/wireshark/labproc.lua",
-                    f"{outer_name}/{report.name}", f"{outer_name}/视频尚未完成.txt"]
+                    f"{outer_name}/{report.name}", f"{outer_name}/{Path(video['video']).name}",
+                    f"{outer_name}/后期配音素材/演示字幕.srt", f"{outer_name}/后期配音素材/配音稿.txt"]
         if any(name not in archive.namelist() for name in required):
             raise RuntimeError("ZIP 缺少必要交付文件")
         count = len(archive.namelist())

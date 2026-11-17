@@ -105,6 +105,12 @@ def main():
             story.extend(table([["同文件对照", "包数", "结果", "TShark 解码设置"]] +
                                [[item["source"], item["packets_compared"], item["status"], item["decode_as"] or "默认"] for item in comparison],
                                [0.30, 0.12, 0.12, 0.46]))
+        elif element.tag == "video":
+            video = json.loads((ROOT / "output/video/latest.json").read_text(encoding="utf-8"))
+            if video["status"] != "PASS":
+                raise RuntimeError("录屏检查尚未通过")
+            story.append(paragraph(f"实际录屏已完成：{video['duration_seconds']:.2f} 秒，{video['resolution'][0]} × {video['resolution'][1]}，25 帧/秒，H.264。视频仅展示嗅探器与 Wireshark 窗口，包含 {video['subtitle_segments']} 段中文字幕；另附无字幕素材、独立 SRT 和口语化配音稿。"))
+            story.append(paragraph(f"本次录制捕获 {video['packets']} 个真实本机包，流量进程 PID={video['traffic_pid']}，关联到 {len(video['pid_streams'])} 条 TCP 流。演示按 PDF 第 9–15 页安排，涵盖 NPS、协议过滤、OSI 分层说明、流与进程追踪及 Lua 扩展。录屏经过全片解码、时长、帧数、字幕生成和持续黑屏检测；画面内容通过实际控件与字段记录核对，未执行人工逐帧视觉审核。"))
         elif element.tag == "history":
             output = subprocess.run(["git", "log", "--reverse", "--format=%h | %aI | %an | %s"], cwd=ROOT,
                                     check=True, capture_output=True, encoding="utf-8").stdout
@@ -130,7 +136,7 @@ def main():
     document.build(story, onFirstPage=footer, onLaterPages=footer)
     reader = PdfReader(path)
     text = "\n".join(page.extract_text() for page in reader.pages)
-    terms = ["课程要求", "GetExtendedTcpTable", "labproc.pid", "Content-Length", "未验证", "尚未录制", "待填写", results["run_id"]]
+    terms = ["课程要求", "GetExtendedTcpTable", "labproc.pid", "Content-Length", "未验证", "实际录屏已完成", "待填写", results["run_id"]]
     missing = [term for term in terms if term not in text]
     if missing or any(float(page.mediabox.width) > 600 or float(page.mediabox.height) > 850 for page in reader.pages):
         raise RuntimeError(f"PDF 内容或尺寸检查失败：{missing}")

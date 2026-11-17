@@ -3,7 +3,7 @@
   <title>实验 1A：带 GUI 的网络嗅探器</title>
   <subtitle>Windows Npcap · 协议分析 · TCP / PID · Wireshark Lua</subtitle>
   <para>姓名：待填写　学号：待填写　课程：软件系统与安全　日期：2026-11-17</para>
-  <para>真实远程 Git 仓库地址：待填写。本项目已经建立本地 Git 仓库并保留实际开发提交，交付源码包含 git-history.bundle 与 git-history.txt。未创建或发布远程仓库，不能把本地路径当作远程 Git 链接。演示视频尚未录制，交付实际运行的录制步骤和讲解稿。</para>
+  <para>真实远程 Git 仓库地址：待填写。本项目已经建立本地 Git 仓库并保留实际开发提交，交付源码包含 git-history.bundle 与 git-history.txt。远程仓库尚未发布。实际演示视频、中文字幕、无字幕素材和口语化配音稿随 ZIP 交付，录制证据与检查范围见本报告。</para>
   <para>AI 使用说明：本项目由 Codex 辅助完成实现、测试与文档。提交者应逐段审阅核心代码、运行演示、理解本报告中的边界，并据实说明个人完成和理解的部分。第三方依赖与项目实现分别列明。</para>
 
   <section title="1　课程要求、实现和验收">
@@ -101,7 +101,7 @@ frame.truncated or ip.fragmented</code>
     <para>进程 JSON schema=1 包含会话 UUID、PCAP SHA256、链路类型、保存包数及有序包记录；每条记录保存原始捕获编号、纳秒时间字符串、捕获/线上长度、原始字节 SHA256、流号、关联状态和 owner。owner 保存 PID、名称、创建时间、本地/远端端点、采样起止时间，process 保存关联时间。纳秒使用字符串避免 Lua 浮点精度损失。原始网络头部和载荷完全保持。</para>
     <para>配对先验证指定 PCAP 全文件摘要，再逐帧核对当前打开文件的长度、时间戳和原始字节摘要。只有全部帧通过并进入重复解析才输出 PID；文件更换、过滤导出、删减、缺少元数据均不能产生误配。捕获原始号允许因队列丢弃出现缺口，重新导出保留 UUID 与原始号。摘要防止意外错配；格式没有数字签名，不能抵抗能同时修改两份文件的攻击者。</para>
     <para>进程字段包括 labproc.pid/name/status/session/original_number/sample_ns/associated_ns/created/local。无元数据为 unknown_no_metadata，验证过程中为 pending_full_capture_validation。重新载入和首选项变更清除校验状态。重复过滤只复用该次完整文件校验，不重复统计。</para>
-    <para>加载方法：open_wireshark.ps1 -Capture 实际文件.pcap 使用 -X lua_script 加载所有项目脚本并传入配对文件。TShark 模式增加 -TShark，自动包含 -2 -R "frame.number &gt;= 1"，确保第一遍实际生成协议树。关闭该实例即可卸载本次加载。长期安装可把三个脚本和 vendor 复制到“帮助 → 关于 → 文件夹”列出的个人 Lua 插件目录内的 ucas_ex1a 子目录，重启；卸载删除该专用子目录。长期安装后不要同时使用 -X 重复注册。长期复制安装与 GUI 菜单交互未执行自动验收。</para>
+    <para>加载方法：open_wireshark.ps1 -Capture 实际文件.pcap 使用 -X lua_script 加载所有项目脚本并传入配对文件。TShark 模式增加 -TShark，自动包含 -2 -R "frame.number &gt;= 1"，确保第一遍实际生成协议树。关闭该实例即可卸载本次加载。长期安装可把三个脚本和 vendor 复制到“帮助 → 关于 → 文件夹”列出的个人 Lua 插件目录内的 ucas_ex1a 子目录，重启；卸载删除该专用子目录。长期安装后不要同时使用 -X 重复注册。长期复制安装未执行验收；本次录屏使用启动参数加载。</para>
     <para>Wireshark GUI 完整载入后应用显示过滤或选择 Tools → UCAS → Refresh process fields。Listener 菜单位于 Statistics → UCAS → LABDEMO request response statistics。它按双向 UDP 端点和请求 ID 配对，按包号去重，统计请求/响应、配对、错误、无效消息、重复、超时、等待和平均 RTT。超时按捕获内最后有效消息时间超过两秒判断，尾部证据不足保持 pending；无配对平均值为 unknown。最多统计原始帧号 100000 以内，达到上限报告 limited。</para>
   </section>
 
@@ -110,7 +110,7 @@ frame.truncated or ip.fragmented</code>
     <evidence/>
     <para>真实流量证据由本机 socket、ping、Npcap 和 Windows 连接表产生。offline_labdemo.pcap 与 offline_tcp_gap_retransmission.pcap 是人工构造的边界样本，用于精确控制异常长度、乱序、重复、冲突和缺口。其来源与真实流量分别标记。测试没有使用 mock 替代 Npcap、Windows API、Qt 或 TShark。</para>
     <para>同一份 PCAP 与 TShark 对照捕获/线上长度、IP 地址、TCP/UDP 端口、TCP 原始序号和 DNS ID；三个 HTTP 测试各验证三个 GET。非标准 HTTP 端口通过 TShark -d tcp.port==18080,http 或 18081,http 显式选择解码；自研识别依据结构。TCP 对照使用 tcp.seq_raw，避免 Wireshark 相对序号造成表面差异。显示包的高层标签可能因重组归属规则而不同，比较基于具体字段。</para>
-    <para>当前 Wireshark 完整加载 Falco 的 cloudtrail、gcpaudit、k8saudit 和课程 Lua 协议，回归检查要求插件加载没有警告、_ws.lua.error 为空，并核对真实接口列表。补充桌面验收使用 Windows 辅助功能接口检查欢迎界面、实时捕获状态、停止按钮和 PID 过滤结果；没有采集或检查截图。工具栏交互与 Lua 字段有实际记录，其他菜单及视觉版式保持未验证。</para>
+    <para>当前 Wireshark 完整加载 Falco 的 cloudtrail、gcpaudit、k8saudit 和课程 Lua 协议，回归检查要求插件加载没有警告、_ws.lua.error 为空，并核对真实接口列表。补充桌面验收使用 Windows 辅助功能接口检查欢迎界面、实时捕获状态、停止按钮和 PID 过滤结果；没有采集或检查截图。录屏进一步记录协议树展开、请求编号过滤和 Listener 统计菜单，未展示的菜单及人工视觉审核保持未验证。</para>
   </section>
 
   <section title="8　运行与复现命令">
@@ -125,13 +125,14 @@ frame.truncated or ip.fragmented</code>
 .\run_tests.ps1 -Offline
 .\open_wireshark.ps1 -Capture '.\实际样例.pcap' -TShark</code>
     <para>完整验收使用本机 53、80、18080、18081、18082、45990 与动态端口，端口占用会报告失败。setup.ps1 安装固定版本 requirements；start.ps1 调用 .venv312。TSHARK_PATH 与 WIRESHARK_PATH 可指向已有安装。离线模式未执行的检查明确记为未验证。</para>
-    <para>演示顺序：选择 loopback 和 BPF；产生三条 HTTP 流；查看协议树和字节；切换显示过滤；跟踪跨段 HTTP 和时间线；按实际 PID 查看多个流；运行 LABDEMO；停止并导出；在 Wireshark 查看 labdemo 与 labproc；打开 Listener；展示离线缺口样本与实际日志。录制步骤和逐段讲解见交付的录制步骤与答辩.md；MP4 尚未制作。</para>
+    <para>演示顺序：选择 loopback 和 BPF；产生三条 HTTP 流及 UDP、DNS、ICMP；查看协议树和字节；切换 IPv4/IPv6 与逻辑过滤；按 PID 查看三条 TCP 流；展示跨段 HTTP、双向内容和时间线；停止并导出；清空、空闲重启和重开；在 Wireshark 查看 labdemo 与 labproc；打开 Listener 请求响应统计。全部展示数据来自该次实际本机捕获。</para>
+    <video/>
   </section>
 
   <section title="9　限制、排错和验收边界">
     <para>已知功能边界包括：仅标准单链路 PCAP；IP 分片不重组；DNS 仅 UDP；HTTP/1.x 有界分析，正文仅预览且不解压；TLS 无解密；TCP 内存窗口有界；PID 依赖本机同期采样且有时间误差；IPv6 scope 证据不足保持不确定；extcap 未实现。连续抓包文件达到配置上限后停止并提示。重开 PCAP 可以重新分析保留窗口，但不能恢复从未捕获或已被驱动丢弃的数据。</para>
     <para>排错证据：Qt 动态库加载需使用兼容的 Python/Visual C++ 运行环境；Npcap 接口访问在具有相应权限的常规 Windows 进程中验证。中文路径下三个 Falco DLL 的 LoadLibraryW 加载成功，UTF-8 字节传入 LoadLibraryA 时返回 126；同版本完整复制到英文安装路径后，三个协议注册成功。默认桌面配置与独立配置均显示 11 个本机接口。PCAP DLT_NULL 数值零需要显式保留；TShark 进程字段要求 -2 与生成协议树的 -R 参数；纳秒时间比较使用 FieldInfo 的 NSTime 成分；Windows 虚拟环境启动器 PID 与实际 Python PID 可以不同，退出测试使用流量进程自行报告的 os.getpid 与捕获证据比较。</para>
-    <para>未强制制造真实网络的乱序、重传、丢包、PID 复用和权限拒绝；这些情况的实现边界与已覆盖离线样本已分别说明。外部 Ethernet 实时流量、极限带宽、Wireshark GUI 菜单交互、视觉布局和实际录屏未验证。报告中的本机性能数字只对应本次测试条件。测试 PASS 不能扩展为未测环境的保证。</para>
+    <para>未强制制造真实网络的乱序、重传、丢包、PID 复用和权限拒绝；这些情况的实现边界与已覆盖离线样本已分别说明。外部 Ethernet 实时流量、极限带宽、未展示的 Wireshark 菜单和人工视觉审核未验证。报告中的本机性能数字只对应本次测试条件。测试 PASS 不能扩展为未测环境的保证。</para>
     <para>缺少驱动时 GUI 保留离线使用；权限、接口、BPF、文件长度或配对校验失败时明确显示原因。失败不会返回伪造 PID、伪造零丢包或成功状态。后台程序错误写入 output/application.log，验收错误写入独立 pytest.log。验证使用隔离输出目录，没有修改用户真实抓包。</para>
   </section>
 
@@ -141,7 +142,7 @@ frame.truncated or ip.fragmented</code>
     <para>Windows：Microsoft Learn，GetExtendedTcpTable、MIB_TCPROW_OWNER_PID、MIB_TCP6ROW_OWNER_PID；对应页面标注更新日期 2022-08-31，适用 Windows IP Helper API。https://learn.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getextendedtcptable ；https://learn.microsoft.com/en-us/windows/win32/api/tcpmib/ns-tcpmib-mib_tcprow_owner_pid ；https://learn.microsoft.com/en-us/windows/win32/api/tcpmib/ns-tcpmib-mib_tcp6row_owner_pid 。</para>
     <para>Wireshark：Wireshark Foundation 官方 Developer's Guide Lua API 和 4.6.9 项目源码；https://www.wireshark.org/docs/wsdg_html_chunked/wsluarm_modules.html 。实际使用 Proto、ProtoField、register_postdissector、Field、Listener、register_menu、TextWindow。在线文档随版本变化，兼容性结论限定为实际测试的 4.6.9/Lua 5.4.6。</para>
     <para>dkjson：David Heiko Kolf，2.11，2026-07-27；https://dkolf.de/dkjson-lua/ ，MIT。sha2.lua：Egor Skriptunoff，v12，2022-02-23；https://github.com/Egor-Skriptunoff/pure_lua_SHA ，MIT。vendored 文件摘要与完整第三方清单在 THIRD_PARTY_NOTICES.md，源码版权说明保留。</para>
-    <para>运行依赖：PySide6-Essentials/shiboken6 6.12.0（Qt 许可）；Scapy 2.8.0（GPL-2.0-only）；Lark 1.3.1（MIT）；psutil 7.2.2（BSD-3-Clause）；pefile 2024.8.26（MIT）。验证/报告使用 pytest 9.2.0、pypdf 7.1.0、ReportLab 5.1.0。Npcap 和 Wireshark 独立安装，ZIP 中不分发其二进制安装包。</para>
+    <para>运行依赖：PySide6-Essentials/shiboken6 6.12.0（Qt 许可）；Scapy 2.8.0（GPL-2.0-only）；Lark 1.3.1（MIT）；psutil 7.2.2（BSD-3-Clause）；pefile 2024.8.26（MIT）。验证/报告使用 pytest 9.2.0、pypdf 7.1.0、ReportLab 5.1.0。录屏与字幕使用 FFmpeg 9.0.2 Gyan essentials 构建（随发行包提供 GPLv3）。Npcap、Wireshark 和 FFmpeg 独立安装，ZIP 中不分发其二进制安装包。</para>
   </section>
 
   <section title="11　答辩准备">
@@ -151,7 +152,7 @@ frame.truncated or ip.fragmented</code>
 
   <section title="12　真实开发记录和交付状态">
     <history/>
-    <para>ZIP 顶层采用 姓名待填写_学号待填写_EX1A；内含同前缀源码目录、实验报告 PDF、视频尚未完成.txt。源码含启动脚本、固定依赖、全部模块、Lua 与第三方许可证、测试、样例、验收记录、录制讲解稿和真实 Git bundle。提交前填写姓名、学号、真实远程仓库 URL，录制并检查实际 MP4 后放入目录。未授权发布远程仓库，因此没有编造链接。</para>
+    <para>ZIP 顶层采用 姓名待填写_学号待填写_EX1A；内含同前缀源码目录、实验报告 PDF、实际 MP4 和后期配音素材目录。源码含启动脚本、固定依赖、全部模块、Lua 与第三方许可证、测试、样例、验收记录、录制工具和真实 Git bundle。后期素材包含无字幕视频、SRT、配音稿及镜头与 PDF 对应表。提交前填写真实姓名、学号与远程仓库 URL，并加入本人配音。远程发布仍需用户执行或明确授权。</para>
     <para>本报告由 ReportLab 生成并通过 pypdf 读取文本、页面尺寸和核心内容检查。依据用户限制没有使用视觉功能，报告视觉检查未执行。交付脚本另行验证 ZIP CRC、必要文件与源码编译，检查结果保存为 delivery-check.json。</para>
   </section>
 </report>

@@ -15,6 +15,7 @@
 | pypdf | 7.1.0 | pypdf 开发者；课件文本与 PDF 校验 | BSD-3-Clause |
 | ReportLab | 5.1.0 | ReportLab；实验报告 PDF | BSD |
 | Wireshark/TShark | 4.6.9 | Wireshark Foundation 与贡献者；Lua 与交叉验证 | GPL-2.0-or-later |
+| FFmpeg | 9.0.2 essentials | FFmpeg 开发者；Gyan Doshi Windows 构建；真实录屏、字幕与视频验证 | 该发行包随附 GPLv3 |
 | dkjson | 2.11 | David Heiko Kolf；Lua JSON 读取 | MIT，源码保留原文 |
 | sha2.lua | v12，2022-02-23 | Egor Skriptunoff；Lua SHA256 | MIT，源码保留原文 |
 

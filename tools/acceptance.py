@@ -80,7 +80,7 @@ def main():
                         "seconds": float(case.attrib.get("time", 0)), "reason": "断言通过" if outcome is None else outcome.attrib.get("message", "")})
     summary = {"run_id": run_id, "command": command, "exit_code": returncode, "duration_seconds": time.monotonic() - started,
                "counts": dict(Counter(item["status"] for item in results)), "tests": results,
-               "unverified": ["真实录屏尚未制作", "Wireshark GUI 菜单交互与界面视觉检查未执行；Lua 使用实际 TShark 验证",
+               "unverified": ["人工视觉审核未执行；视频录制与 Wireshark 菜单演示见 output/video/latest.json 的独立检查记录",
                               "真实网络中的乱序、重传、丢包、PID 复用和权限拒绝未强制制造；相应已覆盖部分见离线测试",
                               "外部 Ethernet 实时流量与高带宽极限性能未测量", "extcap 选做未实现"]}
     if args.offline:
