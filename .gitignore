@@ -1,0 +1,8 @@
+.venv/
+.venv312/
+.work/
+output/
+__pycache__/
+.pytest_cache/
+*.pyc
+dist/
