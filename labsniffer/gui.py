@@ -12,7 +12,9 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, 
                                QSpinBox, QSplitter, QTableView, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from .capture import CaptureEngine
+from .filters import FilterError, compile_filter
 from .npcap import CaptureConfig, CaptureError, Npcap
+from .protocols import parse_packet
 from .storage import export_session
 
 
@@ -73,7 +75,7 @@ class MainWindow(QMainWindow):
         self.evicted = 0
         self.reported_error = ""
         self.filter_function = lambda packet: True
-        self.parser = None
+        self.parser = parse_packet
         self.analyzer = None
         self.tracker = None
         central = QWidget()
@@ -120,6 +122,11 @@ class MainWindow(QMainWindow):
         display_controls.addWidget(self.apply_button)
         layout.addLayout(display_controls)
         self.quick_controls = QHBoxLayout()
+        for label, expression in (("全部", ""), ("HTTP", "http"), ("TCP", "tcp"), ("UDP", "udp"),
+                                  ("IPv4", "ipv4"), ("IPv6", "ipv6"), ("ICMP", "icmp or icmpv6"), ("DNS", "dns")):
+            button = QPushButton(label)
+            button.clicked.connect(lambda checked=False, text=expression: self.set_filter(text))
+            self.quick_controls.addWidget(button)
         layout.addLayout(self.quick_controls)
         self.model = PacketModel()
         self.table = QTableView()
@@ -151,6 +158,8 @@ class MainWindow(QMainWindow):
         self.clear_button.clicked.connect(self.clear_display)
         self.open_button.clicked.connect(self.open_file)
         self.save_button.clicked.connect(self.export_file)
+        self.apply_button.clicked.connect(self.apply_filter)
+        self.display_filter.returnPressed.connect(self.apply_filter)
         self.table.selectionModel().selectionChanged.connect(self.show_packet)
         self.timer = QTimer(self)
         self.timer.setInterval(100)
@@ -161,6 +170,18 @@ class MainWindow(QMainWindow):
 
     def show_error(self, title, error):
         QMessageBox.critical(self, title, str(error))
+
+    def set_filter(self, expression):
+        self.display_filter.setText(expression)
+        self.apply_filter()
+
+    def apply_filter(self):
+        try:
+            expression = compile_filter(self.display_filter.text())
+            self.filter_function = expression
+            self.model.replace([packet for packet in self.history if expression(packet)])
+        except FilterError as error:
+            self.show_error("显示过滤错误", error)
 
     def refresh_devices(self):
         self.adapters.clear()
