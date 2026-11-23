@@ -1,3 +1,4 @@
+import argparse
 import json
 import importlib.metadata
 import subprocess
@@ -23,6 +24,10 @@ FONT = "ReportChinese"
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
+    parser = argparse.ArgumentParser(description="生成实验 1A 报告和内容校验记录")
+    parser.add_argument("--source", type=Path, default=ROOT / "docs/report.xml", help="报告 XML 源稿")
+    parser.add_argument("--output-directory", type=Path, default=ROOT / "output/report", help="报告输出目录")
+    args = parser.parse_args()
     latest = json.loads((ROOT / "output/acceptance/latest.json").read_text(encoding="utf-8"))
     evidence_dir = Path(latest["directory"])
     results = json.loads((evidence_dir / "results.json").read_text(encoding="utf-8"))
@@ -119,9 +124,9 @@ def main():
         else:
             raise ValueError(f"报告中存在未处理的 XML 元素：{element.tag}")
 
-    for element in ET.parse(ROOT / "docs/report.xml").getroot():
+    for element in ET.parse(args.source).getroot():
         render(element)
-    destination = ROOT / "output/report"
+    destination = args.output_directory.resolve()
     destination.mkdir(parents=True, exist_ok=True)
     path = destination / "姓名待填写_学号待填写_ex1A_report.pdf"
 
@@ -132,11 +137,12 @@ def main():
         canvas.drawRightString(A4[0] - 46, 25, f"{document.page}")
 
     document = SimpleDocTemplate(str(path), pagesize=A4, rightMargin=46, leftMargin=46, topMargin=40, bottomMargin=44,
-                                 title="实验 1A：带 GUI 的网络嗅探器", author="姓名待填写；AI 辅助实现")
+                                 title="实验 1A：带 GUI 的网络嗅探器")
     document.build(story, onFirstPage=footer, onLaterPages=footer)
     reader = PdfReader(path)
     text = "\n".join(page.extract_text() for page in reader.pages)
-    terms = ["课程要求", "GetExtendedTcpTable", "labproc.pid", "Content-Length", "未验证", "实际录屏已完成", "待填写", results["run_id"]]
+    terms = ["课程要求", "GetExtendedTcpTable", "labproc.pid", "Content-Length", "未验证", "实际录屏已完成",
+             "真实远程 Git 仓库地址", results["run_id"]]
     missing = [term for term in terms if term not in text]
     if missing or any(float(page.mediabox.width) > 600 or float(page.mediabox.height) > 850 for page in reader.pages):
         raise RuntimeError(f"PDF 内容或尺寸检查失败：{missing}")

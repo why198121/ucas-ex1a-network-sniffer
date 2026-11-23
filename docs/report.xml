@@ -2,16 +2,17 @@
 <report>
   <title>实验 1A：带 GUI 的网络嗅探器</title>
   <subtitle>Windows Npcap · 协议分析 · TCP / PID · Wireshark Lua</subtitle>
-  <para>姓名：待填写　学号：待填写　课程：软件系统与安全　日期：2026-11-17</para>
-  <para>真实远程 Git 仓库地址：待填写。本项目已经建立本地 Git 仓库并保留实际开发提交，交付源码包含 git-history.bundle 与 git-history.txt。远程仓库尚未发布。实际演示视频、中文字幕、无字幕素材和口语化配音稿随 ZIP 交付，录制证据与检查范围见本报告。</para>
+  <para>姓名：待填写　学号：待填写　课程：软件与系统安全　实验验证日期：2026-11-17</para>
+  <para>真实远程 Git 仓库地址：待填写。</para>
+  <para>交付源码包含 git-history.bundle 与 git-history.txt，保存本项目的实际开发提交。MP4 展示实际运行的嗅探器和 Wireshark，录制证据与检查范围见本报告。</para>
   <para>AI 使用说明：本项目由 Codex 辅助完成实现、测试与文档。提交者应逐段审阅核心代码、运行演示、理解本报告中的边界，并据实说明个人完成和理解的部分。第三方依赖与项目实现分别列明。</para>
 
   <section title="1　课程要求、实现和验收">
     <para>依据为刘鹏《实验 1 讲解 2026》，课件标注日期 2026-11-10，共 66 页。页码使用 PDF 物理页码。课件文字已经提取核对；依照用户限制未使用视觉功能，图片内额外文字未验证。第 31–63 页关于实验 1B 的内容未纳入项目。</para>
     <table widths="0.10,0.29,0.20,0.26,0.15">
       <row><cell>页码</cell><cell>课件内容</cell><cell>实现模块</cell><cell>验收方法</cell><cell>性质</cell></row>
-      <row><cell>2</cell><cell>A/B 选一；ZIP；真实开源仓库与开发记录；11 月 24 日 23:55 截止</cell><cell>打包、Git、报告</cell><cell>ZIP 内容；本地实际提交；远程 URL 待填写</cell><cell>课程要求</cell></row>
-      <row><cell>3</cell><cell>姓名_学号_EX1A；源码、MP4、PDF/docx；报告含 Git 链接</cell><cell>交付脚本</cell><cell>目录校验；视频未完成状态明确</cell><cell>课程要求</cell></row>
+      <row><cell>2</cell><cell>A/B 选一，提交未加密 ZIP，并保留开源仓库的完整开发记录。11 月 24 日 23:55 截止。</cell><cell>打包、Git、报告</cell><cell>核对 ZIP、实际提交记录和封面仓库地址</cell><cell>课程要求</cell></row>
+      <row><cell>3</cell><cell>姓名_学号_EX1A 下包含源码、MP4 和 PDF/docx。报告须含 Git 链接。</cell><cell>交付目录、报告</cell><cell>核对目录命名、视频和报告</cell><cell>课程要求</cell></row>
       <row><cell>5、9</cell><cell>带 GUI 的网络嗅探器；必须完成 NPS</cell><cell>npcap、capture、gui</cell><cell>真实抓包、停止、重启、窗口事件循环</cell><cell>核心要求</cell></row>
       <row><cell>9</cell><cell>完善 NPA，识别应用报文；Wireshark 开发加分</cell><cell>protocols、http、Lua</cell><cell>非标准端口 HTTP；真实 TShark 加载</cell><cell>鼓励与加分</cell></row>
       <row><cell>10、12</cell><cell>网卡选择示例</cell><cell>npcap、gui</cell><cell>名称、描述、IPv4/IPv6、loopback</cell><cell>采纳的示例</cell></row>
@@ -152,7 +153,7 @@ frame.truncated or ip.fragmented</code>
 
   <section title="12　真实开发记录和交付状态">
     <history/>
-    <para>ZIP 顶层采用 姓名待填写_学号待填写_EX1A；内含同前缀源码目录、实验报告 PDF、实际 MP4 和后期配音素材目录。源码含启动脚本、固定依赖、全部模块、Lua 与第三方许可证、测试、样例、验收记录、录制工具和真实 Git bundle。后期素材包含无字幕视频、SRT、配音稿及镜头与 PDF 对应表。提交前填写真实姓名、学号与远程仓库 URL，并加入本人配音。远程发布仍需用户执行或明确授权。</para>
+    <para>课程提交文件夹按姓名_学号_EX1A 命名，内部包含同前缀的源码目录、实验报告 PDF 和实际演示 MP4。源码包含启动脚本、固定依赖、实现模块、Lua 脚本、第三方许可证、测试、样例、验收记录、录制工具和真实 Git bundle。仓库链接见报告封面。</para>
     <para>本报告由 ReportLab 生成并通过 pypdf 读取文本、页面尺寸和核心内容检查。依据用户限制没有使用视觉功能，报告视觉检查未执行。交付脚本另行验证 ZIP CRC、必要文件与源码编译，检查结果保存为 delivery-check.json。</para>
   </section>
 </report>
